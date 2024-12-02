@@ -3,7 +3,7 @@ from pathlib import Path
 import requests
 import json
 import time
-from model.modules.classes import *
+from model.modules.classes import ConexaoAPI, UnidadeAPI
 
 ROOT_PATH = Path.cwd()
 file_requests_config = ROOT_PATH / 'source/model/config/requests_config.json'
