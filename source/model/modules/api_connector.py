@@ -178,3 +178,7 @@ def request_memory_saving():
                     time.sleep(1)
 
                 temp_file.write("\n]")
+
+
+def insert_in_db(engine, table_name, data):
+    pass

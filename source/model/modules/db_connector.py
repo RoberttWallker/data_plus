@@ -12,8 +12,6 @@ MODEL_PATH = Path(__file__).absolute().parent.parent
 
 # Funções de salvamento e carregamento de configurações de bancos de dados
 def save_db_config(db_config, filename=None):
-    if filename is None:
-        filename = MODEL_PATH / "config/db_config/db_config.json"
 
     filename.parent.mkdir(parents=True, exist_ok=True)
 
@@ -29,15 +27,29 @@ def save_db_config(db_config, filename=None):
         json.dump(db_configs, file, indent=4)
 
 
-def load_db_config(filename=None):
-    if filename is None:
-        filename = MODEL_PATH / "config/db_config/db_config.json"
+def load_config_file(filename=None):
 
     try:
         with open(filename, "r") as file:
             return json.load(file)
     except (FileNotFoundError, json.JSONDecodeError):
         return []
+
+
+def load_db_config(db_configs):
+    connections = []
+    for config in db_configs:
+        conn = ConfigDB(
+            config.host,
+            config.port,
+            config.user,
+            config.password,
+            config.dbname,
+            config.identificador_api,
+            config.authorization,
+        )
+        connections.append(conn)
+    return connections
 
 
 def get_connecion_data():
@@ -49,8 +61,6 @@ def get_connecion_data():
         user = input("Usuário: ")
         password = input("Senha: ")
         dbname = input("Nome do banco de dados: ")
-        identificador_api = input("Identificador cliente SavWin: ")
-        authorization = input("Authorization key: ")
         time.sleep(1)
 
         while True:  # Inicia o loop de confirmação
@@ -62,8 +72,6 @@ def get_connecion_data():
             print(f"Usuário: {user}")
             print(f"Senha: {password}")
             print(f"Nome do banco de dados: {dbname}")
-            print(f"Identificador cliente SavWin: {identificador_api}")
-            print(f"Authorization key: {authorization}")
 
             confirm = input("\nOs dados estão corretos? (s/n): ").lower()
             if confirm == "s":
@@ -86,21 +94,16 @@ def get_connecion_data():
         user=user,
         password=password,
         dbname=dbname,
-        identificador_api=identificador_api,
-        authorization=authorization,
     )
     return config_db
 
 
-# Métodos de conexão a bancos de dados
-def mysql_connection(
+def mysql_configuration(
     host,
     port,
     user,
     password,
     dbname,
-    identificador_api,
-    authorization,
 ):
 
     # Codifica a senha para evitar caracteres especiais
@@ -108,8 +111,6 @@ def mysql_connection(
 
     engine = create_engine(f"mysql+pymysql://{user}:{encoded_password}@{host}:{port}/")
     connection = engine.connect()
-    metadata = MetaData()
-    dialect = engine.dialect.name
 
     with connection.begin():
         connection.execute(text(f"CREATE DATABASE IF NOT EXISTS {dbname};"))
@@ -120,35 +121,20 @@ def mysql_connection(
         "user": user,
         "password": password,
         "dbname": dbname,
-        "identificador_api": identificador_api,
-        "authorization": authorization,
     }
+
     save_db_config(
         db_config=db_config,
         filename=MODEL_PATH / "config/db_config/db_config_mysql.json",
     )
 
-    mysql_conn = DbMySql(
-        engine=engine,
-        connection=connection,
-        metadata=metadata,
-        identificador_api=identificador_api,
-        authorization=authorization,
-        db_name=dbname,
-        dialect=dialect,
-    )
 
-    return mysql_conn
-
-
-def postgresql_connection(
+def postgresql_configuration(
     host,
     port,
     user,
     password,
     dbname,
-    identificador_api,
-    authorization,
 ):
     # Usar psycopg2 diretamente para conectar sem transações e criar o banco
     conn = psycopg2.connect(
@@ -174,25 +160,44 @@ def postgresql_connection(
         "user": user,
         "password": password,
         "dbname": dbname,
-        "identificador_api": identificador_api,
-        "authorization": authorization,
     }
     save_db_config(
         db_config=db_config,
         filename=MODEL_PATH / "config/db_config/db_config_postgresql.json",
     )
 
+
+# Métodos de conexão a bancos de dados
+
+
+def mysql_connection(user, password, host, port, dbname):
+    # Codifica a senha para evitar caracteres especiais
+    encoded_password = quote(password, safe="")
+
+    engine = create_engine(f"mysql+pymysql://{user}:{encoded_password}@{host}:{port}")
+    connection = engine.connect()
+    metadata = MetaData()
+    dialect = engine.dialect.name
+
+    mysql_conn = DbMySql(
+        engine=engine,
+        connection=connection,
+        metadata=metadata,
+        db_name=dbname,
+        dialect=dialect,
+    )
+
+    return mysql_conn
+
+
+def postgresql_connection(user, password, host, port, dbname):
     # Codifica a senha para evitar caracteres especiais
     encoded_password = quote(password, safe="")
 
     engine = create_engine(
         f"postgresql+psycopg2://{user}:{encoded_password}@{host}:{port}/{dbname}"
     )
-    try:
-        connection = engine.connect()
-    except Exception as e:
-        print(f"Erro ao conectar: {e}")
-
+    connection = engine.connect()
     metadata = MetaData()
     dialect = engine.dialect.name
 
@@ -200,8 +205,6 @@ def postgresql_connection(
         engine=engine,
         connection=connection,
         metadata=metadata,
-        identificador_api=identificador_api,
-        authorization=authorization,
         db_name=dbname,
         dialect=dialect,
     )
@@ -228,27 +231,23 @@ def create_connection_db():
         if escolha == "1":
             config_db = get_connecion_data()
 
-            mysql_connection(
+            mysql_configuration(
                 config_db.host,
                 config_db.port,
                 config_db.user,
                 config_db.password,
                 config_db.dbname,
-                config_db.identificador_api,
-                config_db.authorization,
             )
             break
         elif escolha == "2":
             config_db = get_connecion_data()
 
-            postgresql_connection(
+            postgresql_configuration(
                 config_db.host,
                 config_db.port,
                 config_db.user,
                 config_db.password,
                 config_db.dbname,
-                config_db.identificador_api,
-                config_db.authorization,
             )
             break
         elif escolha == "Q":

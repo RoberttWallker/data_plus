@@ -22,16 +22,12 @@ class ConfigDB:
         user,
         password,
         dbname,
-        identificador_api,
-        authorization,
     ):
         self.host = host
         self.port = port
         self.user = user
         self.password = password
         self.dbname = dbname
-        self.identificador_api = identificador_api
-        self.authorization = authorization
 
 
 class Dialects:
@@ -40,16 +36,12 @@ class Dialects:
         engine,
         connection,
         metadata,
-        identificador_api,
-        authorization,
         dialect,
         db_name,
     ):
         self.engine = engine
         self.connection = connection
         self.metadata = metadata
-        self.identificador_api = identificador_api
-        self.authorization = authorization
         self.dialect = dialect
         self.db_name = db_name
 

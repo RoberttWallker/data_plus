@@ -5,11 +5,18 @@ ROOT_PATH = Path.cwd()
 sys.path.append(str(ROOT_PATH / "source"))
 
 import socket
-from model.data.requests_pool import request_config, request_memory_saving
-from model.modules.db_conn import create_connection_db
+import os
+from model.modules.api_connector import request_config, request_memory_saving
+from model.modules.db_connector import create_connection_db
+from model.modules.db_inserter import insert_into_db, tabelas_e_colunas
 
-host_name = socket.gethostname()
+local_host_name = socket.gethostname()
+local_user_name = os.getlogin()
 
 # create_connection_db()
 # request_config()
-request_memory_saving()
+# equest_memory_saving()
+# insert_into_db()
+# lista = obter_nomes_arquivos()
+lista = tabelas_e_colunas()
+print(lista)
