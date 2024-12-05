@@ -170,27 +170,33 @@ def postgresql_configuration(
 # Métodos de conexão a bancos de dados
 
 
-def mysql_connection(user, password, host, port, dbname):
+def mysql_connection(host, port, user, password, dbname):
     # Codifica a senha para evitar caracteres especiais
+    print(password)
+    print(dbname)
     encoded_password = quote(password, safe="")
 
-    engine = create_engine(f"mysql+pymysql://{user}:{encoded_password}@{host}:{port}")
+    engine = create_engine(
+        f"mysql+pymysql://{user}:{encoded_password}@{host}:{port}/{dbname}"
+    )
     connection = engine.connect()
     metadata = MetaData()
     dialect = engine.dialect.name
-
-    mysql_conn = DbMySql(
-        engine=engine,
-        connection=connection,
-        metadata=metadata,
-        db_name=dbname,
-        dialect=dialect,
-    )
+    try:
+        mysql_conn = DbMySql(
+            engine=engine,
+            connection=connection,
+            metadata=metadata,
+            db_name=dbname,
+            dialect=dialect,
+        )
+    except Exception as e:
+        print(f"Ocorreu o seguinte problema tentar conectar: {e}")
 
     return mysql_conn
 
 
-def postgresql_connection(user, password, host, port, dbname):
+def postgresql_connection(host, port, user, password, dbname):
     # Codifica a senha para evitar caracteres especiais
     encoded_password = quote(password, safe="")
 
@@ -201,13 +207,16 @@ def postgresql_connection(user, password, host, port, dbname):
     metadata = MetaData()
     dialect = engine.dialect.name
 
-    postgresql_conn = DbPostgreSql(
-        engine=engine,
-        connection=connection,
-        metadata=metadata,
-        db_name=dbname,
-        dialect=dialect,
-    )
+    try:
+        postgresql_conn = DbPostgreSql(
+            engine=engine,
+            connection=connection,
+            metadata=metadata,
+            db_name=dbname,
+            dialect=dialect,
+        )
+    except Exception as e:
+        print(f"Ocorreu o seguinte problema tentar conectar: {e}")
 
     return postgresql_conn
 
