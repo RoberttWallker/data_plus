@@ -2,6 +2,7 @@ from pathlib import Path
 import ijson
 import re
 import json
+from sqlalchemy import inspect, Table, Column, Text, text
 
 
 from .db_connector import (
@@ -10,7 +11,6 @@ from .db_connector import (
     load_config_file,
     load_db_config,
 )
-from .classes import ConfigDB
 
 
 MODEL_PATH = Path(__file__).absolute().parent.parent
@@ -40,7 +40,7 @@ def tabelas_e_colunas():
         table_name = re.sub(r"([a-z])([A-Z])", r"\1_\2", file_name).lower()
         colunas = obter_colunas(file)
         tabela_e_colunas.append((table_name, colunas))
-    return json.dumps(tabela_e_colunas, indent=4)
+    return tabela_e_colunas
 
 
 def insert_into_db():
@@ -49,6 +49,8 @@ def insert_into_db():
         for config in db_configs:
             print(type(config))
             print(config)
+
+            perfil = tabelas_e_colunas()
 
             if file.name == "db_config_mysql.json":
                 conn = mysql_connection(
@@ -59,6 +61,15 @@ def insert_into_db():
                     config["dbname"],
                 )
 
+                for tabela, dados in perfil:
+                    first_row = dados
+                    columns = [Column(column_name, Text) for column_name in first_row.keys()]
+
+                    table = Table(tabela, conn.metadata, *columns)
+                
+                conn.metadata.create_all(conn.engine)
+
+
             elif file.name == "db_config_postgresql.json":
                 conn = postgresql_connection(
                     config["host"],
@@ -67,6 +78,14 @@ def insert_into_db():
                     config["password"],
                     config["dbname"],
                 )
+
+                for tabela, dados in perfil:
+                    first_row = dados
+                    columns = [Column(column_name, Text) for column_name in first_row.keys()]
+
+                    table = Table(tabela, conn.metadata, *columns)
+                
+                conn.metadata.create_all(conn.engine)
 
             else:
                 print(
