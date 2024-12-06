@@ -15,7 +15,7 @@ local_user_name = os.getlogin()
 
 # create_connection_db()
 # request_config()
-# equest_memory_saving()
+# request_memory_saving()
 insert_into_db()
 # lista = obter_nomes_arquivos()
 # lista = tabelas_e_dados()

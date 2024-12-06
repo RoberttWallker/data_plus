@@ -29,6 +29,17 @@ class ConfigDB:
         self.password = password
         self.dbname = dbname
 
+    def __str__(self) -> str:
+        return (
+            f"ConfigDB("
+            f"host='{self.host}', "
+            f"port={self.port}, "
+            f"user='{self.user}', "
+            f"password='{'*' * len(self.password)}', "
+            f"dbname='{self.dbname}'"
+            f")"
+        )
+
 
 class Dialects:
     def __init__(

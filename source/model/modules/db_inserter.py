@@ -48,9 +48,9 @@ def obter_colunas(arquivo):
         return primeiro_dicionario
 
 
-def tabelas_e_colunas():
+def tabelas_e_colunas(path):
     tabela_e_colunas = []
-    for file in TEMP_FILE_PATH.rglob("*.json"):
+    for file in path.rglob("*.json"):
         file_name = file.name.split("Grid.")[0]
         table_name = re.sub(r"([a-z])([A-Z])", r"\1_\2", file_name).lower()
         colunas = obter_colunas(file)
@@ -58,9 +58,9 @@ def tabelas_e_colunas():
     return tabela_e_colunas
 
 
-def tabelas_e_dados():
+def tabelas_e_dados(path):
     tabelas_e_dados = []
-    for file in TEMP_FILE_PATH.rglob("*.json"):
+    for file in path.rglob("*.json"):
         file_name = file.name.split("Grid.")[0]
         table_name = re.sub(r"([a-z])([A-Z])", r"\1_\2", file_name).lower()
         tabelas_e_dados.append((table_name, file))
@@ -68,7 +68,7 @@ def tabelas_e_dados():
 
 
 def insert_tables_metadata(conn):
-    perfil_colunas = tabelas_e_colunas()
+    perfil_colunas = tabelas_e_colunas(TEMP_FILE_PATH)
 
     for tabela, colunas in perfil_colunas:
         if not colunas:
@@ -83,50 +83,55 @@ def insert_tables_metadata(conn):
 
 
 def insert_data(conn):
-    dados_completos = tabelas_e_dados()
+    dados_completos = tabelas_e_dados(TEMP_FILE_PATH)
 
     connection = conn.connection
 
     for tabela, dados in dados_completos:
-        if tabela not in conn.metadata.tables:
-            print(f"Tabela '{tabela}' não encontrada no metadata.")
-            continue
+        if dados.exists():
+            if tabela not in conn.metadata.tables:
+                print(f"Tabela '{tabela}' não encontrada no metadata.")
+                continue
 
-        table = conn.metadata.tables[tabela]
-        with open(dados, "r", encoding="utf-8") as f:
-            try:
+            table = conn.metadata.tables[tabela]
+            with open(dados, "r", encoding="utf-8") as f:
+                try:
 
-                parser = ijson.items(f, "item")
-                lote_tam = 1000
-                lote = []
+                    parser = ijson.items(f, "item")
+                    lote_tam = 1000
+                    lote = []
 
-                for item in parser:
-                    if isinstance(item, list):
-                        lote.extend(item)
-                    else:
-                        lote.append(item)
+                    for item in parser:
+                        if isinstance(item, list):
+                            lote.extend(item)
+                        else:
+                            lote.append(item)
 
-                if len(lote) >= lote_tam:
-                    print(f"Inserindo os dados na tabela: {tabela}")
-                    try:
+                    if len(lote) >= lote_tam:
+                        print(f"Inserindo os dados na tabela: {tabela}")
+                        try:
+                            connection.execute(table.insert(), lote)
+                            lote.clear()
+                        except Exception as e:
+                            print(
+                                f"Erro ao fazer o .execute() na tabela: {tabela}: {e}"
+                            )
+
+                    if lote:
                         connection.execute(table.insert(), lote)
-                        lote.clear()
-                    except Exception as e:
-                        print(f"Erro ao fazer o .execute() na tabela: {tabela}: {e}")
 
-                if lote:
-                    connection.execute(table.insert(), lote)
+                except Exception as e:
+                    print(f"Erro ao processar dados para '{tabela}': {e}")
 
+            try:
+                connection.commit()
+                connection.close()
             except Exception as e:
-                print(f"Erro ao processar dados para '{tabela}': {e}")
-
-    try:
-        connection.commit()
-        connection.close()
-    except Exception as e:
-        print(f"\nErro ao fazer commit das alterações: {e}\n")
-    finally:
-        print(f"\nFechando conexão com banco de dados.")
+                print(f"\nErro ao fazer commit das alterações: {e}\n")
+            finally:
+                print(f"\nFechando conexão com banco de dados.")
+        else:
+            print("Arquivo não existe.")
 
 
 def insert_manager(conn):
@@ -144,21 +149,19 @@ def insert_manager(conn):
             print(
                 f"Ocorreu um erro ao inserir os dados no banco de dados. Erro: {e}",
             )
-        return True
+
     except Exception as e:
         print(f"Ocorreu um erro: {e} na função insert_manager()")
-        return False
 
 
 def insert_into_db():
-    insert_manager_status = []
+    controle = {}
     for file in CONFIG_PATH.rglob("db_config/*.json"):
         db_configs = load_config_file(file)
         for config in db_configs:
-            print(type(config))
-            print(config)
 
             if file.name == "db_config_mysql.json":
+                print(f"\nEssas são as configuraçãoes do db:\n{config}\n")
                 conn = mysql_connection(
                     config["host"],
                     config["port"],
@@ -167,9 +170,15 @@ def insert_into_db():
                     config["dbname"],
                 )
 
-                insert_manager_status.append(insert_manager(conn))
+                if conn == None:
+                    print("Conexão falhou. Não é possível construir as tabelas.")
+                    controle[config["dbname"]] = False
+                else:
+                    insert_manager(conn)
+                    controle[conn.db_name] = True
 
             elif file.name == "db_config_postgresql.json":
+                print(f"\nEssas são as configuraçãoes do db:\n{config}\n")
                 conn = postgresql_connection(
                     config["host"],
                     config["port"],
@@ -178,15 +187,20 @@ def insert_into_db():
                     config["dbname"],
                 )
 
-                insert_manager_status.append(insert_manager(conn))
+                if conn == None:
+                    print("Conexão falhou. Não é possível construir as tabelas.")
+                    controle[config["dbname"]] = False
+                else:
+                    insert_manager(conn)
+                    controle[conn.db_name] = True
 
             else:
                 print(
                     "Arquivo fora do padrão, ou SGBD ainda não configurado na ferramenta!"
                 )
-                insert_manager_status.append(False)
+                controle["Fora_padrao_ou_sgbd_nao_configurado"] = False
 
-    if all(insert_manager_status):
+    if all(controle.values()):
         delete_temp_files()
     else:
         print("Nem todas as inserções foram bem-sucedidas. Arquivos mantidos.")

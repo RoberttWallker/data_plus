@@ -1,4 +1,5 @@
 from sqlalchemy import create_engine, MetaData, text
+from sqlalchemy.exc import OperationalError
 import time
 from urllib.parse import quote
 from model.modules.classes import DbMySql, DbPostgreSql, ConfigDB
@@ -45,8 +46,6 @@ def load_db_config(db_configs):
             config.user,
             config.password,
             config.dbname,
-            config.identificador_api,
-            config.authorization,
         )
         connections.append(conn)
     return connections
@@ -105,28 +104,40 @@ def mysql_configuration(
     password,
     dbname,
 ):
+    try:
+        # Codifica a senha para evitar caracteres especiais
+        encoded_password = quote(password, safe="")
 
-    # Codifica a senha para evitar caracteres especiais
-    encoded_password = quote(password, safe="")
+        engine = create_engine(
+            f"mysql+pymysql://{user}:{encoded_password}@{host}:{port}/"
+        )
+        connection = engine.connect()
 
-    engine = create_engine(f"mysql+pymysql://{user}:{encoded_password}@{host}:{port}/")
-    connection = engine.connect()
+        with connection.begin():
+            connection.execute(text(f"CREATE DATABASE IF NOT EXISTS {dbname};"))
 
-    with connection.begin():
-        connection.execute(text(f"CREATE DATABASE IF NOT EXISTS {dbname};"))
+        db_config = {
+            "host": host,
+            "port": port,
+            "user": user,
+            "password": password,
+            "dbname": dbname,
+        }
 
-    db_config = {
-        "host": host,
-        "port": port,
-        "user": user,
-        "password": password,
-        "dbname": dbname,
-    }
-
-    save_db_config(
-        db_config=db_config,
-        filename=MODEL_PATH / "config/db_config/db_config_mysql.json",
-    )
+        save_db_config(
+            db_config=db_config,
+            filename=MODEL_PATH / "config/db_config/db_config_mysql.json",
+        )
+    except OperationalError as e:
+        numero_erro = e.orig.args[0]
+        if numero_erro == 2003:
+            print(f"Erro! Endereço do Host ou porta de acesso não está correto.")
+            print(f"Erro completo: {e.orig.args}")
+        elif numero_erro == 1045:
+            print(f"Erro! Endereço usuário ou senha não está correto.")
+            print(f"Erro completo: {e.orig.args}")
+    except Exception as e:
+        print(f"Ocorreu o seguinte erro: {e}")
 
 
 def postgresql_configuration(
@@ -136,35 +147,49 @@ def postgresql_configuration(
     password,
     dbname,
 ):
-    # Usar psycopg2 diretamente para conectar sem transações e criar o banco
-    conn = psycopg2.connect(
-        host=host, port=port, user=user, password=password, dbname="postgres"
-    )
-    conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
-    cursor = conn.cursor()
+    try:
+        # Usar psycopg2 diretamente para conectar sem transações e criar o banco
+        conn = psycopg2.connect(
+            host=host,
+            port=port,
+            user=user,
+            password=password,
+            dbname="postgres",
+        )
+        conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+        cursor = conn.cursor()
 
-    # Verificar se o banco de dados já existe
-    cursor.execute(f"SELECT 1 FROM pg_database WHERE datname='{dbname}'")
-    exists = cursor.fetchone()
+        # Verificar se o banco de dados já existe
+        cursor.execute(f"SELECT 1 FROM pg_database WHERE datname='{dbname}'")
+        exists = cursor.fetchone()
 
-    if not exists:
-        # Criar o banco de dados se ele não existir
-        cursor.execute(f"CREATE DATABASE {dbname};")
+        if not exists:
+            # Criar o banco de dados se ele não existir
+            cursor.execute(f"CREATE DATABASE {dbname};")
 
-    cursor.close()
-    conn.close()
+        cursor.close()
+        conn.close()
 
-    db_config = {
-        "host": host,
-        "port": port,
-        "user": user,
-        "password": password,
-        "dbname": dbname,
-    }
-    save_db_config(
-        db_config=db_config,
-        filename=MODEL_PATH / "config/db_config/db_config_postgresql.json",
-    )
+        db_config = {
+            "host": host,
+            "port": port,
+            "user": user,
+            "password": password,
+            "dbname": dbname,
+        }
+        save_db_config(
+            db_config=db_config,
+            filename=MODEL_PATH / "config/db_config/db_config_postgresql.json",
+        )
+
+    except psycopg2.OperationalError as e:
+        print(f"Erro! Porta de acesso não está correta.\n")
+        print(f"Erro completo: {e}")
+    except UnicodeDecodeError as e:
+        print(f"Erro! Host, usuário ou senha de acesso não está correto.")
+        print(f"Erro completo: {e}")
+    except Exception as e:
+        print(f"Ocorreu o seguinte erro: {e}")
 
 
 # Métodos de conexão a bancos de dados
@@ -172,17 +197,16 @@ def postgresql_configuration(
 
 def mysql_connection(host, port, user, password, dbname):
     # Codifica a senha para evitar caracteres especiais
-    print(password)
-    print(dbname)
     encoded_password = quote(password, safe="")
 
-    engine = create_engine(
-        f"mysql+pymysql://{user}:{encoded_password}@{host}:{port}/{dbname}"
-    )
-    connection = engine.connect()
-    metadata = MetaData()
-    dialect = engine.dialect.name
     try:
+        engine = create_engine(
+            f"mysql+pymysql://{user}:{encoded_password}@{host}:{port}/{dbname}"
+        )
+        connection = engine.connect()
+        metadata = MetaData()
+        dialect = engine.dialect.name
+
         mysql_conn = DbMySql(
             engine=engine,
             connection=connection,
@@ -190,24 +214,36 @@ def mysql_connection(host, port, user, password, dbname):
             db_name=dbname,
             dialect=dialect,
         )
-    except Exception as e:
-        print(f"Ocorreu o seguinte problema tentar conectar: {e}")
 
-    return mysql_conn
+        return mysql_conn
+
+    except OperationalError as e:
+        numero_erro = e.orig.args[0]
+        if numero_erro == 2003:
+            print(f"Erro! Endereço do Host ou porta de acesso não está correto.")
+            print(f"Erro completo: {e.orig.args}")
+            return None
+        elif numero_erro == 1045:
+            print(f"Erro! Endereço usuário ou senha não está correto.")
+            print(f"Erro completo: {e.orig.args}")
+            return None
+    except Exception as e:
+        print(f"Ocorreu o seguinte erro: {e}")
+        return None
 
 
 def postgresql_connection(host, port, user, password, dbname):
-    # Codifica a senha para evitar caracteres especiais
-    encoded_password = quote(password, safe="")
-
-    engine = create_engine(
-        f"postgresql+psycopg2://{user}:{encoded_password}@{host}:{port}/{dbname}"
-    )
-    connection = engine.connect()
-    metadata = MetaData()
-    dialect = engine.dialect.name
-
     try:
+        # Codifica a senha para evitar caracteres especiais
+        encoded_password = quote(password, safe="")
+
+        engine = create_engine(
+            f"postgresql+psycopg2://{user}:{encoded_password}@{host}:{port}/{dbname}"
+        )
+        connection = engine.connect()
+        metadata = MetaData()
+        dialect = engine.dialect.name
+
         postgresql_conn = DbPostgreSql(
             engine=engine,
             connection=connection,
@@ -215,10 +251,20 @@ def postgresql_connection(host, port, user, password, dbname):
             db_name=dbname,
             dialect=dialect,
         )
-    except Exception as e:
-        print(f"Ocorreu o seguinte problema tentar conectar: {e}")
 
-    return postgresql_conn
+        return postgresql_conn
+
+    except OperationalError as e:
+        print(f"Erro! Porta de acesso não está correta.\n")
+        print(f"Erro completo: {e}")
+        return None
+    except UnicodeDecodeError as e:
+        print(f"Erro! Host, usuário, senha ou banco de dados não está correto.\n")
+        print(f"Erro completo: {e}")
+        return None
+    except Exception as e:
+        print(f"Ocorreu o seguinte erro: {e}")
+        return None
 
 
 # Métodos de criação de banco de dados
