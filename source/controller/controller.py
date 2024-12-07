@@ -8,15 +8,22 @@ import socket
 import os
 from model.modules.api_connector import request_config, request_memory_saving
 from model.modules.db_connector import create_connection_db
-from model.modules.db_inserter import insert_into_db, tabelas_e_colunas, tabelas_e_dados
+from model.modules.db_inserter import insert_into_db
 
 local_host_name = socket.gethostname()
 local_user_name = os.getlogin()
 
-# create_connection_db()
-# request_config()
-# request_memory_saving()
-insert_into_db()
-# lista = obter_nomes_arquivos()
-# lista = tabelas_e_dados()
-# print(lista)
+def init_creation_db():
+    create_connection_db()
+
+
+def init_creation_requests():
+    request_config()
+
+
+def total_data_requests():
+    request_memory_saving()
+
+
+def total_inserter():   
+    insert_into_db()

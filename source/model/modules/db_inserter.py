@@ -3,6 +3,7 @@ import ijson
 import re
 import json
 from sqlalchemy import inspect, Table, Column, Text, text
+import time
 
 
 from .db_connector import (
@@ -72,7 +73,7 @@ def insert_tables_metadata(conn):
 
     for tabela, colunas in perfil_colunas:
         if not colunas:
-            print(f"Tabela '{tabela}' ignorada: dados do JSON estão vazios.")
+            print(f">>>Tabela '{tabela}' ignorada: dados do JSON estão vazios.\n{' '*11}{'-'*len(tabela)}")
             continue
 
         columns = [Column(column_name, Text) for column_name in colunas.keys()]
@@ -86,52 +87,55 @@ def insert_data(conn):
     dados_completos = tabelas_e_dados(TEMP_FILE_PATH)
 
     connection = conn.connection
+    connection_name = f"{conn.db_name} - {conn.dialect}"
 
-    for tabela, dados in dados_completos:
-        if dados.exists():
-            if tabela not in conn.metadata.tables:
-                print(f"Tabela '{tabela}' não encontrada no metadata.")
-                continue
+    print(f"{'-'*44}{'-'*len(connection_name)}\nIniciando processo de inserção de dados em: {connection_name}\n{'-'*44}{'-'*len(connection_name)}\n")
+    try:
+        for tabela, dados in dados_completos:
+            if dados.exists():
+                if tabela not in conn.metadata.tables:
+                    print(f">>>Tabela '{tabela}' não encontrada no metadata.\n{' '*11}{'-'*len(tabela)}")
+                    continue
 
-            table = conn.metadata.tables[tabela]
-            with open(dados, "r", encoding="utf-8") as f:
-                try:
+                table = conn.metadata.tables[tabela]
+                with open(dados, "r", encoding="utf-8") as f:
+                    try:
 
-                    parser = ijson.items(f, "item")
-                    lote_tam = 1000
-                    lote = []
+                        parser = ijson.items(f, "item")
+                        lote_tam = 1000
+                        lote = []
 
-                    for item in parser:
-                        if isinstance(item, list):
-                            lote.extend(item)
-                        else:
-                            lote.append(item)
+                        for item in parser:
+                            if isinstance(item, list):
+                                lote.extend(item)
+                            else:
+                                lote.append(item)
 
-                    if len(lote) >= lote_tam:
-                        print(f"Inserindo os dados na tabela: {tabela}")
-                        try:
+                        if len(lote) >= lote_tam:
+                            print(f"Inserindo os dados na tabela: {tabela}")
+                            try:
+                                connection.execute(table.insert(), lote)
+                                lote.clear()
+                            except Exception as e:
+                                print(
+                                    f"Erro ao fazer o .execute() na tabela: {tabela}: {e}"
+                                )
+
+                        if lote:
                             connection.execute(table.insert(), lote)
-                            lote.clear()
-                        except Exception as e:
-                            print(
-                                f"Erro ao fazer o .execute() na tabela: {tabela}: {e}"
-                            )
 
-                    if lote:
-                        connection.execute(table.insert(), lote)
+                    except Exception as e:
+                        print(f"Erro ao processar dados para '{tabela}': {e}")
 
+                try:
+                    connection.commit()
                 except Exception as e:
-                    print(f"Erro ao processar dados para '{tabela}': {e}")
-
-            try:
-                connection.commit()
-                connection.close()
-            except Exception as e:
-                print(f"\nErro ao fazer commit das alterações: {e}\n")
-            finally:
-                print(f"\nFechando conexão com banco de dados.")
-        else:
-            print("Arquivo não existe.")
+                    print(f"\nErro ao fazer commit das alterações: {e}\n")
+            else:
+                print("Arquivo não existe.")
+    finally:
+        print(f"\n{'-'*37}{'-'*len(connection_name)}\nFechando conexão com banco de dados: {connection_name}\n{'-'*37}{'-'*len(connection_name)}\n")
+        connection.close()
 
 
 def insert_manager(conn):
@@ -160,8 +164,11 @@ def insert_into_db():
         db_configs = load_config_file(file)
         for config in db_configs:
 
+            print("\nIniciando...")
             if file.name == "db_config_mysql.json":
-                print(f"\nEssas são as configuraçãoes do db:\n{config}\n")
+                time.sleep(1)
+                print(f"\nEssas são as configuraçãoes do banco de dados:\n{config}\n")
+                time.sleep(1)
                 conn = mysql_connection(
                     config["host"],
                     config["port"],

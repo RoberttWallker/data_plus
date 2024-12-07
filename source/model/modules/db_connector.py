@@ -12,7 +12,7 @@ MODEL_PATH = Path(__file__).absolute().parent.parent
 
 
 # Funções de salvamento e carregamento de configurações de bancos de dados
-def save_db_config(db_config, filename=None):
+def save_db_config(db_config, filename):
 
     filename.parent.mkdir(parents=True, exist_ok=True)
 
@@ -28,7 +28,7 @@ def save_db_config(db_config, filename=None):
         json.dump(db_configs, file, indent=4)
 
 
-def load_config_file(filename=None):
+def load_config_file(filename):
 
     try:
         with open(filename, "r") as file:
@@ -129,13 +129,13 @@ def mysql_configuration(
             filename=MODEL_PATH / "config/db_config/db_config_mysql.json",
         )
     except OperationalError as e:
-        numero_erro = e.orig.args[0]
+        numero_erro = e.orig.args[0] # type: ignore
         if numero_erro == 2003:
             print(f"Erro! Endereço do Host ou porta de acesso não está correto.")
-            print(f"Erro completo: {e.orig.args}")
+            print(f"Erro completo: {e.orig.args}") # type: ignore
         elif numero_erro == 1045:
             print(f"Erro! Endereço usuário ou senha não está correto.")
-            print(f"Erro completo: {e.orig.args}")
+            print(f"Erro completo: {e.orig.args}") # type: ignore
     except Exception as e:
         print(f"Ocorreu o seguinte erro: {e}")
 
@@ -218,14 +218,14 @@ def mysql_connection(host, port, user, password, dbname):
         return mysql_conn
 
     except OperationalError as e:
-        numero_erro = e.orig.args[0]
+        numero_erro = e.orig.args[0] # type: ignore
         if numero_erro == 2003:
             print(f"Erro! Endereço do Host ou porta de acesso não está correto.")
-            print(f"Erro completo: {e.orig.args}")
+            print(f"Erro completo: {e.orig.args}") # type: ignore
             return None
         elif numero_erro == 1045:
             print(f"Erro! Endereço usuário ou senha não está correto.")
-            print(f"Erro completo: {e.orig.args}")
+            print(f"Erro completo: {e.orig.args}") # type: ignore
             return None
     except Exception as e:
         print(f"Ocorreu o seguinte erro: {e}")

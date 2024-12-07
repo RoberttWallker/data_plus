@@ -152,7 +152,7 @@ def request_memory_saving():
                     "Content-Type": "application/json",
                 }
 
-                while data_inicial < data_final:
+                while data_inicial < data_final: # type: ignore
                     data_final_periodo = min(data_inicial + dias_incremento, data_final)
                     response = requests.post(
                         f"{config['url_base']}{config['relative_path']}",
@@ -179,6 +179,3 @@ def request_memory_saving():
 
                 temp_file.write("\n]")
 
-
-def insert_in_db(engine, table_name, data):
-    pass
