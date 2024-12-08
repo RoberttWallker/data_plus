@@ -19,6 +19,15 @@ def save_db_config(db_config, filename):
     try:
         with open(filename, "r") as file:
             db_configs = json.load(file)
+            for config in db_configs:
+                if (config["host"] == db_config["host"] and
+                    config["port"] == db_config["port"] and
+                    config["dbname"] == db_config["dbname"]
+                    ):
+                    print(
+                        f"\n{"-"*35}\nA configuração de banco de dados: {json.dumps(db_config, indent=4)}, já existe!\n{"-"*35}\n"
+                    )
+                    return
     except (FileNotFoundError, json.JSONDecodeError):
         db_configs = []
 

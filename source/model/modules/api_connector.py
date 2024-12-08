@@ -3,13 +3,14 @@ from pathlib import Path
 import requests
 import json
 import time
+import traceback
 from model.modules.classes import ConexaoAPI, UnidadeAPI
 
 ROOT_PATH = Path.cwd()
 file_requests_config = (
     ROOT_PATH / "source/model/config/requests_config/requests_config.json"
 )
-file_requests_config.parent.mkdir(parents=True, exist_ok=True)
+
 
 no_date_api_list = ["EstoqueAnalitico", "ProdutosCadastrados"]
 
@@ -19,6 +20,8 @@ dias_incremento = timedelta(days=120)
 
 def save_requests_config(conexao_api, unidade_api):
     file_name = file_requests_config
+
+    file_name.parent.mkdir(parents=True, exist_ok=True)
 
     request_config = {
         "url_base": conexao_api.url_base,
@@ -52,37 +55,144 @@ def save_requests_config(conexao_api, unidade_api):
 
 def request_config():
     print("Insira os dados solicitados para configurar a consulta da API")
-    url_base = input(
-        "Informe a URL base da API, Ex(https://api.savwinweb.com.br/api/): "
-    )
-    identificador = input("Identificador: ")
-    authorization = input("Authorization: ")
-    relative_path = input("Pasta relativa, Ex(Relatorios/EstoqueAnaliticoGrid): ")
-    body = {}
-
-    # Agora, solicitamos os parâmetros chave-valor do usuário
-    print(
-        """
-###########################################################################################
-    Insira os parâmetros da consulta no formato chave=valor. Digite 'fim' para encerrar.
-###########################################################################################
-          """
-    )
     while True:
-        chave = input("Chave: ")
-        if (
-            chave.lower() == "fim"
-        ):  # Permite ao usuário terminar a inserção de parâmetros
-            break
-        valor = input(f"Valor para {chave}: ")
-        body[chave] = valor
+        url_base = input(
+            "Informe a URL base da API, Ex(https://api.savwinweb.com.br/api/): "
+        )
+        identificador = input("Identificador: ")
+        authorization = input("Authorization: ")
+        relative_path = input("Pasta relativa, Ex(Relatorios/EstoqueAnaliticoGrid): ")
+        body = {}
 
-    print("\nConfiguração API cadastrada com sucesso.")
+        # Agora, solicitamos os parâmetros chave-valor do usuário
+        print(
+            """
+    ###########################################################################################
+        Insira os parâmetros da consulta no formato chave=valor. Digite 'fim' para encerrar.
+    ###########################################################################################
+            """
+        )
 
-    conexao_api = ConexaoAPI(url_base, identificador, authorization)
-    unidade_api = UnidadeAPI(relative_path, body)
+        while True:
+            chave = input("Chave: ")
+            if (
+                chave.lower() == "fim"
+            ):  # Permite ao usuário terminar a inserção de parâmetros
+                break
+            valor = input(f"Valor para {chave}: ")
+            body[chave] = valor
 
-    save_requests_config(conexao_api, unidade_api)
+        try:
+            conexao_api = ConexaoAPI(url_base, identificador, authorization)
+            unidade_api = UnidadeAPI(relative_path, body)
+            save_requests_config(conexao_api, unidade_api)
+            print("\nConfiguração API cadastrada com sucesso.")
+        except Exception as e:
+            print("Ocorreu um erro ao salvar a configuração:")
+            print(f"Tipo do erro: {type(e).__name__}")
+            traceback.print_exc()
+
+        while True:
+            escolha = input("Deseja inserir outra configuração de API? s/n").lower()
+            if escolha == "s":
+                print("Reiniciando configuração de APIs...\n")
+                time.sleep(1)
+                break
+            elif escolha == "n":
+                print("Encerrando configuração de APIs...\n")
+                time.sleep(1)
+                return
+            else:
+                print("Opção incorreta, tente novamente.\n")
+                time.sleep(1)
+
+
+def full_requests(config, temp_file):
+    headers = {
+        "Identificador": config["identificador"],
+        "Authorization": config["authorization"],
+        "Content-Type": "application/json",
+    }
+    response = requests.post(
+        f"{config['url_base']}{config['relative_path']}",
+        headers=headers,
+        json=config["body"],
+        stream=True,
+    )
+    if response.status_code == 200:
+        data = response.json()
+
+        json.dump(data, temp_file, ensure_ascii=False)
+    else:
+        raise Exception(
+            f"Erro na requisição: {response.status_code} - {response.text}"
+        )
+
+
+def get_initial_date(config):
+    data_inicial = None
+    try:
+        if "ProdutosPorOS" in config["relative_path"]:
+            data_inicial = datetime.strptime(
+                config["body"]["DATAINICIAL"], "%d/%m/%Y"
+            )
+        elif "EntradasEstoque" in config["relative_path"]:
+            data_inicial = datetime.strptime(
+                config["body"]["DATAINICIO"], "%d/%m/%Y"
+            )
+        elif "ContasPagarPagas" in config["relative_path"]:
+            data_inicial = datetime.strptime(
+                config["body"]["DUPEMISSAO1"], "%d/%m/%Y"
+            )
+        elif "ReceberRecebidas" in config["relative_path"]:
+            data_inicial = datetime.strptime(
+                config["body"]["DUPEMISSAO1"], "%d/%m/%Y"
+            )
+
+    except KeyError as e:
+        print(f"Chave não encontrada: {e}. Pulando para o próximo caso.")
+    except ValueError as e:
+        print(f"Erro ao converter data: {e}. Verifique o formato.")
+
+    return data_inicial
+
+
+def chunks_requests(config, data_inicial, data_final, dias_incremento, temp_file):
+    
+    total_iteracoes = 0
+
+    headers = {
+        "Identificador": config["identificador"],
+        "Authorization": config["authorization"],
+        "Content-Type": "application/json",
+    }
+
+    while data_inicial < data_final: # type: ignore
+
+        data_final_periodo = min(data_inicial + dias_incremento, data_final)
+
+        response = requests.post(
+            f"{config['url_base']}{config['relative_path']}",
+            headers=headers,
+            json=config["body"],
+            stream=True,
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+
+            if total_iteracoes > 0:
+                temp_file.write(",\n")
+
+            json.dump(data, temp_file, ensure_ascii=False)
+            total_iteracoes += 1
+        else:
+            raise Exception(
+                f"Erro na requisição: {response.status_code} - {response.text}"
+            )
+
+        data_inicial = data_final_periodo
+        time.sleep(1)
 
 
 def request_memory_saving():
@@ -106,76 +216,24 @@ def request_memory_saving():
             with temp_file.open(mode="w", encoding="utf-8") as temp_file:
                 temp_file.write("[\n")
 
-                total_iteracoes = 0
-
                 if any(item in config["relative_path"] for item in no_date_api_list):
-                    headers = {
-                        "Identificador": config["identificador"],
-                        "Authorization": config["authorization"],
-                        "Content-Type": "application/json",
-                    }
-                    response = requests.post(
-                        f"{config['url_base']}{config['relative_path']}",
-                        headers=headers,
-                        json=config["body"],
-                        stream=True,
+                    
+                    full_requests(config=config, temp_file=temp_file)
+
+                data_inicial = get_initial_date(config=config)
+
+                if data_inicial is None:
+                    print(f"Verifique as configurações de: {json.dumps(config, indent=4)}.")
+                    temp_file.write("\n]")
+                    continue
+                
+                chunks_requests(
+                    config=config, 
+                    data_inicial=data_inicial, 
+                    data_final=data_final, 
+                    dias_incremento=dias_incremento, 
+                    temp_file=temp_file,
                     )
-                    if response.status_code == 200:
-                        data = response.json()
-
-                        json.dump(data, temp_file, ensure_ascii=False)
-                    else:
-                        raise Exception(
-                            f"Erro na requisição: {response.status_code} - {response.text}"
-                        )
-
-                if "ProdutosPorOS" in config["relative_path"]:
-                    data_inicial = datetime.strptime(
-                        config["body"]["DATAINICIAL"], "%d/%m/%Y"
-                    )
-                elif "EntradasEstoque" in config["relative_path"]:
-                    data_inicial = datetime.strptime(
-                        config["body"]["DATAINICIO"], "%d/%m/%Y"
-                    )
-                elif "ContasPagarPagas" in config["relative_path"]:
-                    data_inicial = datetime.strptime(
-                        config["body"]["DUPEMISSAO1"], "%d/%m/%Y"
-                    )
-                elif "ReceberRecebidas" in config["relative_path"]:
-                    data_inicial = datetime.strptime(
-                        config["body"]["DUPEMISSAO1"], "%d/%m/%Y"
-                    )
-
-                headers = {
-                    "Identificador": config["identificador"],
-                    "Authorization": config["authorization"],
-                    "Content-Type": "application/json",
-                }
-
-                while data_inicial < data_final: # type: ignore
-                    data_final_periodo = min(data_inicial + dias_incremento, data_final)
-                    response = requests.post(
-                        f"{config['url_base']}{config['relative_path']}",
-                        headers=headers,
-                        json=config["body"],
-                        stream=True,
-                    )
-
-                    if response.status_code == 200:
-                        data = response.json()
-
-                        if total_iteracoes > 0:
-                            temp_file.write(",\n")
-
-                        json.dump(data, temp_file, ensure_ascii=False)
-                        total_iteracoes += 1
-                    else:
-                        raise Exception(
-                            f"Erro na requisição: {response.status_code} - {response.text}"
-                        )
-
-                    data_inicial = data_final_periodo
-                    time.sleep(1)
 
                 temp_file.write("\n]")
 
