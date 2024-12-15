@@ -9,6 +9,7 @@ import psycopg2
 
 
 MODEL_PATH = Path(__file__).absolute().parent.parent
+DB_CONFIG_PATH = MODEL_PATH / "config/db_config/"
 
 
 # Funções de salvamento e carregamento de configurações de bancos de dados
@@ -192,6 +193,43 @@ def postgresql_configuration(
         print(f"Ocorreu o seguinte erro: {e}")
 
 
+def check_existing_db_config(config_db, sgbd_configuration, sgbd_configs_file):
+    if sgbd_configs_file.exists():
+        configs = load_config_file(sgbd_configs_file)
+        config_exists = any(
+            config['host'] == config_db.host and
+            config['port'] == config_db.port and
+            config['user'] == config_db.user and
+            config['password'] == config_db.password and
+            config['dbname'] == config_db.dbname 
+            for config in configs
+        )
+
+        if config_exists:
+            print(
+                f"A configuração para o banco {config_db.dbname} já existe."
+            )
+            return
+
+        else:
+            sgbd_configuration(
+                config_db.host,
+                config_db.port,
+                config_db.user,
+                config_db.password,
+                config_db.dbname,
+            )
+            return
+
+    sgbd_configuration(
+        config_db.host,
+        config_db.port,
+        config_db.user,
+        config_db.password,
+        config_db.dbname,
+    )
+    return
+
 # Métodos de conexão a bancos de dados
 
 
@@ -286,25 +324,59 @@ def create_connection_db():
         if escolha == "1":
             config_db = get_connecion_data()
 
-            mysql_configuration(
-                config_db.host,
-                config_db.port,
-                config_db.user,
-                config_db.password,
-                config_db.dbname,
-            )
-            break
+            mysql_configs_file = DB_CONFIG_PATH / "db_config_mysql.json"
+
+            check_existing_db_config(config_db, mysql_configuration, mysql_configs_file)
+            
+            # if mysql_configs_file.exists():
+            #     configs = load_db_config(mysql_configs_file)
+            #     config_exists = any(
+            #         config.host == config_db.host and
+            #         config.port == config_db.port and
+            #         config.user == config_db.user and
+            #         config.password == config_db.password and
+            #         config.dbname == config_db.dbname 
+            #         for config in configs
+            #     )
+
+            #     if config_exists:
+            #         print(
+            #             f"A configuração para o banco {config_db.dbname} já existe."
+            #         )
+
+            #     else:
+            #         mysql_configuration(
+            #             config_db.host,
+            #             config_db.port,
+            #             config_db.user,
+            #             config_db.password,
+            #             config_db.dbname,
+            #         )
+            #         break
+
+            # mysql_configuration(
+            #     config_db.host,
+            #     config_db.port,
+            #     config_db.user,
+            #     config_db.password,
+            #     config_db.dbname,
+            # )
+            # break
+
         elif escolha == "2":
             config_db = get_connecion_data()
+            postgresql_configs_file = DB_CONFIG_PATH / "db_config_postgresql.json"
 
-            postgresql_configuration(
-                config_db.host,
-                config_db.port,
-                config_db.user,
-                config_db.password,
-                config_db.dbname,
-            )
-            break
+            check_existing_db_config(config_db, postgresql_configuration, postgresql_configs_file)
+
+            # postgresql_configuration(
+            #     config_db.host,
+            #     config_db.port,
+            #     config_db.user,
+            #     config_db.password,
+            #     config_db.dbname,
+            # )
+            # break
         elif escolha == "Q":
             print("Encerrando o programa.")
             time.sleep(1)

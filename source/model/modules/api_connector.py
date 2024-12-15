@@ -16,6 +16,31 @@ no_date_api_list = ["EstoqueAnalitico", "ProdutosCadastrados"]
 data_final = datetime.today()
 dias_incremento = timedelta(days=120)
 
+def get_initial_date(config):
+    data_inicial = None
+
+    if "ProdutosPorOS" in config["relative_path"]:
+        data_inicial_str = config['body'].get('DATAINICIAL')
+        if data_inicial_str:
+            data_inicial = datetime.strptime(
+            data_inicial_str, "%d/%m/%Y"
+        )
+    elif "EntradasEstoque" in config["relative_path"]:
+        data_inicial_str = config['body'].get('DATAINICIO')
+        if data_inicial_str:
+            data_inicial = datetime.strptime(
+            data_inicial_str, "%d/%m/%Y"
+        )
+    elif any(item in config["relative_path"] for item in ["ContasPagarPagas", "ReceberRecebidas"]):
+        data_inicial_str = config['body'].get("DUPEMISSAO1")
+        if data_inicial_str:
+            data_inicial = datetime.strptime(
+            data_inicial_str, "%d/%m/%Y"
+        )
+    dados = (data_inicial, config["relative_path"])
+
+    return dados
+
 
 def save_requests_config(conexao_api, unidade_api):
     file_name = file_requests_config
@@ -103,23 +128,26 @@ def request_memory_saving():
 
             temp_file.parent.mkdir(parents=True, exist_ok=True)
 
+            headers = {
+                "Identificador": config["identificador"],
+                "Authorization": config["authorization"],
+                "Content-Type": "application/json",
+            }
+
+            response = requests.post(
+                f"{config['url_base']}{config['relative_path']}",
+                headers=headers,
+                json=config["body"],
+                stream=True,
+            )
+
             with temp_file.open(mode="w", encoding="utf-8") as temp_file:
                 temp_file.write("[\n")
 
                 total_iteracoes = 0
 
                 if any(item in config["relative_path"] for item in no_date_api_list):
-                    headers = {
-                        "Identificador": config["identificador"],
-                        "Authorization": config["authorization"],
-                        "Content-Type": "application/json",
-                    }
-                    response = requests.post(
-                        f"{config['url_base']}{config['relative_path']}",
-                        headers=headers,
-                        json=config["body"],
-                        stream=True,
-                    )
+                    
                     if response.status_code == 200:
                         data = response.json()
 
@@ -128,54 +156,34 @@ def request_memory_saving():
                         raise Exception(
                             f"Erro na requisição: {response.status_code} - {response.text}"
                         )
+                    temp_file.write("\n]")
 
-                if "ProdutosPorOS" in config["relative_path"]:
-                    data_inicial = datetime.strptime(
-                        config["body"]["DATAINICIAL"], "%d/%m/%Y"
-                    )
-                elif "EntradasEstoque" in config["relative_path"]:
-                    data_inicial = datetime.strptime(
-                        config["body"]["DATAINICIO"], "%d/%m/%Y"
-                    )
-                elif "ContasPagarPagas" in config["relative_path"]:
-                    data_inicial = datetime.strptime(
-                        config["body"]["DUPEMISSAO1"], "%d/%m/%Y"
-                    )
-                elif "ReceberRecebidas" in config["relative_path"]:
-                    data_inicial = datetime.strptime(
-                        config["body"]["DUPEMISSAO1"], "%d/%m/%Y"
-                    )
+                else:    
+                    data_inicial, api_nome = get_initial_date(config)
+                    if not data_inicial:
+                        print(f"Não existe Data Inicial, nos parâmetros de {api_nome}. \nIgorando essa requisição...")
+                        time.sleep(1)
+                        continue
+                        
 
-                headers = {
-                    "Identificador": config["identificador"],
-                    "Authorization": config["authorization"],
-                    "Content-Type": "application/json",
-                }
+                    while data_inicial < data_final: # type: ignore
+                        data_final_periodo = min(data_inicial + dias_incremento, data_final)
+                    
+                        if response.status_code == 200:
+                            data = response.json()
 
-                while data_inicial < data_final: # type: ignore
-                    data_final_periodo = min(data_inicial + dias_incremento, data_final)
-                    response = requests.post(
-                        f"{config['url_base']}{config['relative_path']}",
-                        headers=headers,
-                        json=config["body"],
-                        stream=True,
-                    )
+                            if total_iteracoes > 0:
+                                temp_file.write(",\n")
 
-                    if response.status_code == 200:
-                        data = response.json()
+                            json.dump(data, temp_file, ensure_ascii=False)
+                            total_iteracoes += 1
+                        else:
+                            raise Exception(
+                                f"Erro na requisição: {response.status_code} - {response.text}"
+                            )
 
-                        if total_iteracoes > 0:
-                            temp_file.write(",\n")
+                        data_inicial = data_final_periodo
+                        time.sleep(1)
 
-                        json.dump(data, temp_file, ensure_ascii=False)
-                        total_iteracoes += 1
-                    else:
-                        raise Exception(
-                            f"Erro na requisição: {response.status_code} - {response.text}"
-                        )
-
-                    data_inicial = data_final_periodo
-                    time.sleep(1)
-
-                temp_file.write("\n]")
+                    temp_file.write("\n]")
 

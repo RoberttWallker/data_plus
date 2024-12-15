@@ -9,11 +9,11 @@ from source.controller.controller import (
 def main():
     while True:
         resposta = input('''
-    Escolha uma das opções abaixo:
-        1 - Iniciar criação do banco de dados completo.
-        2 - Gravar configuração de banco de dados.
-        3 - Gravar configuração de nova API.                                                                                
-        >>>'''
+Escolha uma das opções abaixo:
+    1 - Iniciar criação do banco de dados completo.
+    2 - Gravar configuração de banco de dados.
+    3 - Gravar configuração de nova API.                                                                                
+    >>>'''
         )
         if resposta == "1":
 
