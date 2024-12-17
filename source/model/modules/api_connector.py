@@ -100,82 +100,88 @@ def request_memory_saving():
                 ROOT_PATH
                 / f"source/model/data/temp_file_data/{config['relative_path']}.json"
             )
+            
+            if not temp_file.exists():
 
-            temp_file.parent.mkdir(parents=True, exist_ok=True)
+                temp_file.parent.mkdir(parents=True, exist_ok=True)
 
-            with temp_file.open(mode="w", encoding="utf-8") as temp_file:
-                temp_file.write("[\n")
+                with temp_file.open(mode="w", encoding="utf-8") as temp_file:
+                    temp_file.write("[\n")
 
-                total_iteracoes = 0
+                    total_iteracoes = 0
 
-                if any(item in config["relative_path"] for item in no_date_api_list):
+                    if any(item in config["relative_path"] for item in no_date_api_list):
+                        headers = {
+                            "Identificador": config["identificador"],
+                            "Authorization": config["authorization"],
+                            "Content-Type": "application/json",
+                        }
+                        response = requests.post(
+                            f"{config['url_base']}{config['relative_path']}",
+                            headers=headers,
+                            json=config["body"],
+                            stream=True,
+                        )
+                        if response.status_code == 200:
+                            data = response.json()
+
+                            json.dump(data, temp_file, ensure_ascii=False)
+                        else:
+                            raise Exception(
+                                f"Erro na requisição: {response.status_code} - {response.text}"
+                            )
+
+                    if "ProdutosPorOS" in config["relative_path"]:
+                        data_inicial = datetime.strptime(
+                            config["body"]["DATAINICIAL"], "%d/%m/%Y"
+                        )
+                    elif "EntradasEstoque" in config["relative_path"]:
+                        data_inicial = datetime.strptime(
+                            config["body"]["DATAINICIO"], "%d/%m/%Y"
+                        )
+                    elif "ContasPagarPagas" in config["relative_path"]:
+                        data_inicial = datetime.strptime(
+                            config["body"]["DUPEMISSAO1"], "%d/%m/%Y"
+                        )
+                    elif "ReceberRecebidas" in config["relative_path"]:
+                        data_inicial = datetime.strptime(
+                            config["body"]["DUPEMISSAO1"], "%d/%m/%Y"
+                        )
+
                     headers = {
                         "Identificador": config["identificador"],
                         "Authorization": config["authorization"],
                         "Content-Type": "application/json",
                     }
-                    response = requests.post(
-                        f"{config['url_base']}{config['relative_path']}",
-                        headers=headers,
-                        json=config["body"],
-                        stream=True,
-                    )
-                    if response.status_code == 200:
-                        data = response.json()
 
-                        json.dump(data, temp_file, ensure_ascii=False)
-                    else:
-                        raise Exception(
-                            f"Erro na requisição: {response.status_code} - {response.text}"
+                    while data_inicial < data_final: # type: ignore
+                        data_final_periodo = min(data_inicial + dias_incremento, data_final)
+                        response = requests.post(
+                            f"{config['url_base']}{config['relative_path']}",
+                            headers=headers,
+                            json=config["body"],
+                            stream=True,
                         )
 
-                if "ProdutosPorOS" in config["relative_path"]:
-                    data_inicial = datetime.strptime(
-                        config["body"]["DATAINICIAL"], "%d/%m/%Y"
-                    )
-                elif "EntradasEstoque" in config["relative_path"]:
-                    data_inicial = datetime.strptime(
-                        config["body"]["DATAINICIO"], "%d/%m/%Y"
-                    )
-                elif "ContasPagarPagas" in config["relative_path"]:
-                    data_inicial = datetime.strptime(
-                        config["body"]["DUPEMISSAO1"], "%d/%m/%Y"
-                    )
-                elif "ReceberRecebidas" in config["relative_path"]:
-                    data_inicial = datetime.strptime(
-                        config["body"]["DUPEMISSAO1"], "%d/%m/%Y"
-                    )
+                        if response.status_code == 200:
+                            data = response.json()
 
-                headers = {
-                    "Identificador": config["identificador"],
-                    "Authorization": config["authorization"],
-                    "Content-Type": "application/json",
-                }
+                            if total_iteracoes > 0:
+                                temp_file.write(",\n")
 
-                while data_inicial < data_final: # type: ignore
-                    data_final_periodo = min(data_inicial + dias_incremento, data_final)
-                    response = requests.post(
-                        f"{config['url_base']}{config['relative_path']}",
-                        headers=headers,
-                        json=config["body"],
-                        stream=True,
-                    )
+                            json.dump(data, temp_file, ensure_ascii=False)
+                            total_iteracoes += 1
+                        else:
+                            raise Exception(
+                                f"Erro na requisição: {response.status_code} - {response.text}"
+                            )
 
-                    if response.status_code == 200:
-                        data = response.json()
+                        data_inicial = data_final_periodo
+                        time.sleep(1)
 
-                        if total_iteracoes > 0:
-                            temp_file.write(",\n")
-
-                        json.dump(data, temp_file, ensure_ascii=False)
-                        total_iteracoes += 1
-                    else:
-                        raise Exception(
-                            f"Erro na requisição: {response.status_code} - {response.text}"
-                        )
-
-                    data_inicial = data_final_periodo
-                    time.sleep(1)
-
-                temp_file.write("\n]")
+                    temp_file.write("\n]")
+            
+            else:
+                print(f"O arquivo para: {config['relative_path']} já existe.")
+                continue
 
