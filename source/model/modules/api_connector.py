@@ -17,7 +17,7 @@ no_date_api_list = ["EstoqueAnalitico", "ProdutosCadastrados"]
 data_final = datetime.today()
 dias_incremento = timedelta(days=120)
 
-
+# Configurações de APIs
 def save_requests_config(conexao_api, unidade_api):
     file_name = file_requests_config
 
@@ -107,6 +107,7 @@ def request_config():
                 time.sleep(1)
 
 
+# Tipos de requests
 def full_requests(config, temp_file):
     headers = {
         "Identificador": config["identificador"],
@@ -127,34 +128,6 @@ def full_requests(config, temp_file):
         raise Exception(
             f"Erro na requisição: {response.status_code} - {response.text}"
         )
-
-
-def get_initial_date(config):
-    data_inicial = None
-    try:
-        if "ProdutosPorOS" in config["relative_path"]:
-            data_inicial = datetime.strptime(
-                config["body"]["DATAINICIAL"], "%d/%m/%Y"
-            )
-        elif "EntradasEstoque" in config["relative_path"]:
-            data_inicial = datetime.strptime(
-                config["body"]["DATAINICIO"], "%d/%m/%Y"
-            )
-        elif "ContasPagarPagas" in config["relative_path"]:
-            data_inicial = datetime.strptime(
-                config["body"]["DUPEMISSAO1"], "%d/%m/%Y"
-            )
-        elif "ReceberRecebidas" in config["relative_path"]:
-            data_inicial = datetime.strptime(
-                config["body"]["DUPEMISSAO1"], "%d/%m/%Y"
-            )
-
-    except KeyError as e:
-        print(f"Chave não encontrada: {e}. Pulando para o próximo caso.")
-    except ValueError as e:
-        print(f"Erro ao converter data: {e}. Verifique o formato.")
-
-    return data_inicial
 
 
 def chunks_requests(config, data_inicial, data_final, dias_incremento, temp_file):
@@ -195,6 +168,36 @@ def chunks_requests(config, data_inicial, data_final, dias_incremento, temp_file
         time.sleep(1)
 
 
+# Métodos de DATA
+def get_initial_date(config):
+    data_inicial = None
+    try:
+        if "ProdutosPorOS" in config["relative_path"]:
+            data_inicial = datetime.strptime(
+                config["body"]["DATAINICIAL"], "%d/%m/%Y"
+            )
+        elif "EntradasEstoque" in config["relative_path"]:
+            data_inicial = datetime.strptime(
+                config["body"]["DATAINICIO"], "%d/%m/%Y"
+            )
+        elif "ContasPagarPagas" in config["relative_path"]:
+            data_inicial = datetime.strptime(
+                config["body"]["DUPEMISSAO1"], "%d/%m/%Y"
+            )
+        elif "ReceberRecebidas" in config["relative_path"]:
+            data_inicial = datetime.strptime(
+                config["body"]["DUPEMISSAO1"], "%d/%m/%Y"
+            )
+
+    except KeyError as e:
+        print(f"Chave não encontrada: {e}. Pulando para o próximo caso.")
+    except ValueError as e:
+        print(f"Erro ao converter data: {e}. Verifique o formato.")
+
+    return data_inicial
+
+
+# Download de dados das APIs
 def request_memory_saving():
     file_name = file_requests_config
 
@@ -210,30 +213,34 @@ def request_memory_saving():
                 ROOT_PATH
                 / f"source/model/data/temp_file_data/{config['relative_path']}.json"
             )
+            
+            if not temp_file.exists():
 
-            temp_file.parent.mkdir(parents=True, exist_ok=True)
+                temp_file.parent.mkdir(parents=True, exist_ok=True)
 
-            with temp_file.open(mode="w", encoding="utf-8") as temp_file:
-                temp_file.write("[\n")
+                with temp_file.open(mode="w", encoding="utf-8") as temp_file:
+                    temp_file.write("[\n")
 
-                if any(item in config["relative_path"] for item in no_date_api_list):
+                    if any(item in config["relative_path"] for item in no_date_api_list):
+                        
+                        full_requests(config=config, temp_file=temp_file)
+
+                    data_inicial = get_initial_date(config=config)
+
+                    if data_inicial is None:
+                        print(f"Verifique as configurações de: {json.dumps(config, indent=4)}.")
+                        temp_file.write("\n]")
+                        continue
                     
-                    full_requests(config=config, temp_file=temp_file)
+                    chunks_requests(
+                        config=config, 
+                        data_inicial=data_inicial, 
+                        data_final=data_final, 
+                        dias_incremento=dias_incremento, 
+                        temp_file=temp_file,
+                        )
 
-                data_inicial = get_initial_date(config=config)
-
-                if data_inicial is None:
-                    print(f"Verifique as configurações de: {json.dumps(config, indent=4)}.")
                     temp_file.write("\n]")
-                    continue
-                
-                chunks_requests(
-                    config=config, 
-                    data_inicial=data_inicial, 
-                    data_final=data_final, 
-                    dias_incremento=dias_incremento, 
-                    temp_file=temp_file,
-                    )
-
-                temp_file.write("\n]")
+            else:
+                print(f"O arquivo para: {config['relative_path']}, já existe na pasta de arquivos temporários.")
 

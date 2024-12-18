@@ -2,38 +2,106 @@ from pathlib import Path
 import ijson
 import re
 import traceback
-from sqlalchemy import inspect, Table, Column, Text, text
+from sqlalchemy import Table, Column, Text, Integer, Float, Boolean, Date, String
 import time
+from datetime import datetime
+from collections import Counter
 
 
 from .db_connector import (
     mysql_connection,
     postgresql_connection,
-    load_config_file,
-    load_db_config,
+    load_config_file
 )
-
+from .aux_functions import delete_temp_files, conferir_tipo
 
 MODEL_PATH = Path(__file__).absolute().parent.parent
 CONFIG_PATH = MODEL_PATH / "config"
 TEMP_FILE_PATH = MODEL_PATH / "data/temp_file_data"
 
+# Função para converter os tipos de dados identificados em tipos de dados do SQLAlchemy
+def tipo_para_sqlalchemy(tipo):
+    if tipo == "int":
+        return Integer
+    elif tipo == "bool":
+        return Boolean
+    elif tipo == "float":
+        return Float
+    elif tipo == "date":
+        return Date
+    else:
+        return String
 
-def delete_temp_files():
-    for item in TEMP_FILE_PATH.glob("*"):
+def amostra_tabelas(arquivo, limite=1000):
+    perfil_tabelas = []
+    with open(arquivo, "r", encoding="utf-8") as f:
+        parser = ijson.items(f, "lista.lista") # ijson retorna cada item dentro da chave(itera sobre a lista)
+        for idx, dict in enumerate(parser):
+            if idx >= limite:
+                print("Limite de dados para perfil atingido.")
+                break
+            perfil_tabelas.append(dict)
+    return perfil_tabelas
+
+
+def tabelas_e_amostras(path):
+    tabela_e_colunas = []
+    for file in path.rglob("*.json"):
         try:
-            if item.is_file():
-                item.unlink()
-            elif item.is_dir():
-                for sub_item in item.glob("*"):
-                    sub_item.unlink() if sub_item.is_file() else sub_item.rmdir()
-                item.rmdir()
+            file_name = file.name.split("Grid.")[0]
+            table_name = re.sub(r"([a-z])([A-Z])", r"\1_\2", file_name).lower()
+            perfil = amostra_tabelas(file)
+
+            if not perfil:
+                print(f"Arquivo {file.name} não contém dados válidos.")
+                continue  # Ignora o arquivo se não houver dados válidos
+
         except Exception as e:
-            print(f"Erro ao remover {item}: {e}")
+            print(f"Erro ao processar o arquivo {file}: {e}")
+            continue  # Ignora o arquivo e continua o loop
+        
+        tabela_e_colunas.append((table_name, perfil))
 
-    print("Arquivos e pastas temporárias, removidos com sucesso.")
+    return tabela_e_colunas
 
 
+def definir_tipo_colunas(amostra): # Retorna a coluna e tipo predominante dela
+    tipos_por_chave = {}
+    for chave, valor in amostra.items():
+        tipo_valor = conferir_tipo(valor)
+        if chave not in tipos_por_chave:
+            tipos_por_chave[chave] = []
+        tipos_por_chave[chave].append(tipo_valor)
+
+    perfil = {}
+    for chave, tipos in tipos_por_chave.items():
+        contador = Counter(tipos)
+        tipo_predominante = contador.most_common(1)[0][0]
+        perfil[chave] = tipo_predominante
+
+    return perfil
+
+
+def insert_tables_metadata_TESTE(conn):
+    amostras = tabelas_e_amostras(TEMP_FILE_PATH)  # Nome tabela e amostra de 1000
+
+    for tabela, amostra in amostras:
+        tipos_de_colunas = definir_tipo_colunas(amostra)
+
+        # Criar a lista de colunas para a tabela
+        columns = []
+        for column_name, tipo in tipos_de_colunas.items():  # Correção de .item() para .items()
+            tipo_sqlalchemy = tipo_para_sqlalchemy(tipo)
+            columns.append(Column(column_name, tipo_sqlalchemy))
+
+        # Criar a tabela no metadata
+        table = Table(tabela, conn.metadata, *columns)
+
+    # Criar todas as tabelas no banco de dados (após o loop)
+    conn.metadata.create_all(conn.engine)
+
+
+# Perfil das tabelas
 def obter_colunas(arquivo):
     with open(arquivo, "r", encoding="utf-8") as f:
         try:
@@ -86,6 +154,7 @@ def tabelas_e_dados(path):
     return tabelas_e_dados
 
 
+# Inserção de dados
 def insert_tables_metadata(conn):
     perfil_colunas = tabelas_e_colunas(TEMP_FILE_PATH)
 
@@ -99,7 +168,7 @@ def insert_tables_metadata(conn):
         table = Table(tabela, conn.metadata, *columns)
 
     conn.metadata.create_all(conn.engine)
-
+        
 
 def insert_data(conn):
     dados_completos = tabelas_e_dados(TEMP_FILE_PATH)
@@ -228,6 +297,6 @@ def insert_into_db():
                 controle["Fora_padrao_ou_sgbd_nao_configurado"] = False
 
     if all(controle.values()):
-        delete_temp_files()
+        delete_temp_files(TEMP_FILE_PATH)
     else:
         print("Nem todas as inserções foram bem-sucedidas. Arquivos mantidos.")
