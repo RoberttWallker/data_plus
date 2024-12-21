@@ -1,0 +1,65 @@
+[33mcommit 91857bf5fc44cecc53c0e1f70bb7b0fbacd06c2f[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;32mdevelop[m[33m)[m
+Author: RoberttWallker <robertwalker.rodrigues@gmail.com>
+Date:   Sun Dec 15 16:18:11 2024 -0300
+
+    Banco de dados duplicado impedido
+
+[33mcommit 1c78ffe2fb5b044aa7859b7e94752621b8fa81f7[m
+Author: RoberttWallker <robertwalker.rodrigues@gmail.com>
+Date:   Sat Dec 7 20:17:17 2024 -0300
+
+    Criando main.py
+
+[33mcommit 8e96eab382f994067626d2fcfc9be2df66cf3d19[m
+Author: RoberttWallker <robertwalker.rodrigues@gmail.com>
+Date:   Fri Dec 6 16:48:55 2024 -0300
+
+    Commit acerto em inserter
+
+[33mcommit 03e3b088b231c14c644ea138fc75ddb9aa698f38[m
+Author: RoberttWallker <robertwalker.rodrigues@gmail.com>
+Date:   Thu Dec 5 14:51:58 2024 -0300
+
+    Finalização de insert_into_db()
+
+[33mcommit 917b01ddc5d8ec4d15e5529de5c4e849aa8090e0[m
+Author: RoberttWallker <robertwalker.rodrigues@gmail.com>
+Date:   Wed Dec 4 21:59:04 2024 -0300
+
+    Adição de tabelas no metadata
+
+[33mcommit 1a08e92e011380d546603a6a8e28e3e5cce6b3bd[m
+Author: RoberttWallker <robertwalker.rodrigues@gmail.com>
+Date:   Wed Dec 4 21:35:08 2024 -0300
+
+    Adição de método tabelas_e_colunas
+
+[33mcommit 7695aadd4d32e8accefb0481bb3a9b29912dc121[m
+Author: RoberttWallker <robertwalker.rodrigues@gmail.com>
+Date:   Tue Dec 3 12:24:36 2024 -0300
+
+    Correção em métodos de criação de configurações, de bancos de dados e de APIs
+
+[33mcommit 70407674dd0f3739a21fb9b5b6c721a97a07205c[m
+Author: RoberttWallker <robertwalker.rodrigues@gmail.com>
+Date:   Mon Dec 2 17:18:02 2024 -0300
+
+    Adição de conexão ao mysql e postgresql
+
+[33mcommit b4db0884138817a94b9ef387edec2060452e1a6d[m
+Author: RoberttWallker <robertwalker.rodrigues@gmail.com>
+Date:   Mon Dec 2 12:40:25 2024 -0300
+
+    Alterações feitas em request_memory_saving()
+
+[33mcommit cda5fe4fcb56e6026604d8f53e4f6a2fe9a3ced6[m
+Author: RoberttWallker <robertwalker.rodrigues@gmail.com>
+Date:   Sun Dec 1 21:40:00 2024 -0300
+
+    commit inicial
+
+[33mcommit ed6671b7ce0fb4fa284ce34e1541d0f23ef6d60f[m
+Author: RoberttWallker <148144190+RoberttWallker@users.noreply.github.com>
+Date:   Sun Dec 1 13:33:59 2024 -0300
+
+    Initial commit

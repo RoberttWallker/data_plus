@@ -28,4 +28,3 @@ def total_data_requests():
 def total_inserter():   
     insert_into_db()
 
-create_connection_db()
