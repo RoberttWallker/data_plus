@@ -1,73 +1,24 @@
 from pathlib import Path
 import ijson
-import re
-import json
-from sqlalchemy import inspect, Table, Column, Text, text
+import traceback
+from sqlalchemy import Table, Column, Text
 import time
 
 
 from .db_connector import (
     mysql_connection,
     postgresql_connection,
-    load_config_file,
-    load_db_config,
+    load_config_file
 )
-
+from .aux_func_app import delete_temp_files
+from .aux_func_inserter import tabelas_e_colunas, tabelas_e_dados
 
 MODEL_PATH = Path(__file__).absolute().parent.parent
 CONFIG_PATH = MODEL_PATH / "config"
 TEMP_FILE_PATH = MODEL_PATH / "data/temp_file_data"
 
 
-def delete_temp_files():
-    for item in TEMP_FILE_PATH.glob("*"):
-        try:
-            if item.is_file():
-                item.unlink()
-            elif item.is_dir():
-                for sub_item in item.glob("*"):
-                    sub_item.unlink() if sub_item.is_file() else sub_item.rmdir()
-                item.rmdir()
-        except Exception as e:
-            print(f"Erro ao remover {item}: {e}")
-
-    print("Arquivos e pastas temporárias, removidos com sucesso.")
-
-
-def obter_colunas(arquivo):
-    with open(arquivo, "r", encoding="utf-8") as f:
-        try:
-            # Tenta acessar como uma lista de listas
-            parser = ijson.items(f, "item.item")
-            primeiro_dicionario = next(parser)
-        except StopIteration:
-            # Se falhar, volta ao início do arquivo e tenta como lista simples
-            f.seek(0)  # Reinicia a leitura do arquivo
-            parser = ijson.items(f, "item")
-            primeiro_dicionario = next(parser)
-
-        return primeiro_dicionario
-
-
-def tabelas_e_colunas(path):
-    tabela_e_colunas = []
-    for file in path.rglob("*.json"):
-        file_name = file.name.split("Grid.")[0]
-        table_name = re.sub(r"([a-z])([A-Z])", r"\1_\2", file_name).lower()
-        colunas = obter_colunas(file)
-        tabela_e_colunas.append((table_name, colunas))
-    return tabela_e_colunas
-
-
-def tabelas_e_dados(path):
-    tabelas_e_dados = []
-    for file in path.rglob("*.json"):
-        file_name = file.name.split("Grid.")[0]
-        table_name = re.sub(r"([a-z])([A-Z])", r"\1_\2", file_name).lower()
-        tabelas_e_dados.append((table_name, file))
-    return tabelas_e_dados
-
-
+# Inserção de dados
 def insert_tables_metadata(conn):
     perfil_colunas = tabelas_e_colunas(TEMP_FILE_PATH)
 
@@ -81,7 +32,7 @@ def insert_tables_metadata(conn):
         table = Table(tabela, conn.metadata, *columns)
 
     conn.metadata.create_all(conn.engine)
-
+        
 
 def insert_data(conn):
     dados_completos = tabelas_e_dados(TEMP_FILE_PATH)
@@ -146,6 +97,7 @@ def insert_manager(conn):
             print(
                 f"Ocorreu um erro ao inserir as tabelas no metadata. Erro: {e}",
             )
+            traceback.print_exc()
 
         try:
             insert_data(conn)
@@ -153,6 +105,7 @@ def insert_manager(conn):
             print(
                 f"Ocorreu um erro ao inserir os dados no banco de dados. Erro: {e}",
             )
+            traceback.print_exc()
 
     except Exception as e:
         print(f"Ocorreu um erro: {e} na função insert_manager()")
@@ -208,6 +161,6 @@ def insert_into_db():
                 controle["Fora_padrao_ou_sgbd_nao_configurado"] = False
 
     if all(controle.values()):
-        delete_temp_files()
+        delete_temp_files(TEMP_FILE_PATH)
     else:
         print("Nem todas as inserções foram bem-sucedidas. Arquivos mantidos.")
