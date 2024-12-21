@@ -93,7 +93,7 @@ def request_config():
             traceback.print_exc()
 
         while True:
-            escolha = input("Deseja inserir outra configuração de API? s/n").lower()
+            escolha = input("Deseja inserir outra configuração de API? s/n\n>>> ").lower()
             if escolha == "s":
                 print("Reiniciando configuração de APIs...\n")
                 time.sleep(1)
@@ -225,22 +225,25 @@ def request_memory_saving():
                         
                         full_requests(config=config, temp_file=temp_file)
 
-                    data_inicial = get_initial_date(config=config)
-
-                    if data_inicial is None:
-                        print(f"Verifique as configurações de: {json.dumps(config, indent=4)}.")
                         temp_file.write("\n]")
-                        continue
-                    
-                    chunks_requests(
-                        config=config, 
-                        data_inicial=data_inicial, 
-                        data_final=data_final, 
-                        dias_incremento=dias_incremento, 
-                        temp_file=temp_file,
-                        )
+                    else:
 
-                    temp_file.write("\n]")
+                        data_inicial = get_initial_date(config=config)
+
+                        if data_inicial is None:
+                            print(f"Verifique as configurações de: {json.dumps(config, indent=4)}.")
+                            temp_file.write("\n]")
+                            continue
+                        
+                        chunks_requests(
+                            config=config, 
+                            data_inicial=data_inicial, 
+                            data_final=data_final, 
+                            dias_incremento=dias_incremento, 
+                            temp_file=temp_file,
+                            )
+
+                        temp_file.write("\n]")
             else:
                 print(f"O arquivo para: {config['relative_path']}, já existe na pasta de arquivos temporários.")
 

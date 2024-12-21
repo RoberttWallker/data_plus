@@ -291,7 +291,7 @@ def create_connection_db():
 | Q - Sair                      |
 #################################
 >>>"""
-        )
+        ).upper()
         if escolha == "1":
             config_db = get_connecion_data()
 
@@ -315,9 +315,9 @@ def create_connection_db():
             )
             break
         elif escolha == "Q":
-            print("Encerrando o programa.")
+            print("Saindo das configurações de SGBD...\n")
             time.sleep(1)
-            exit()
+            break
         else:
             print("Opção inválida, tente novamente.")
             time.sleep(1)

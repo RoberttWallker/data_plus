@@ -18,7 +18,7 @@ def main():
 ).upper()
         if resposta == "1":
             while True:
-                resposta_2 = input('Deseja inserir as configurações de um novo banco de dados? s/n\n>>>').lower()
+                resposta_2 = input('Deseja inserir as configurações de um novo banco de dados? s/n\n>>> ').lower()
                 if resposta_2 == "s":
                     time.sleep(1)
                     init_creation_db()
@@ -32,7 +32,7 @@ def main():
                     time.sleep(1)
                 
             while True:
-                resposta_3 = input('Deseja inserir as configurações das requisições API? s/n\n>>>').lower()
+                resposta_3 = input('Deseja inserir as configurações das requisições API? s/n\n>>> ').lower()
                 if resposta_3 == "s":
                     time.sleep(1)
                     init_creation_requests()
