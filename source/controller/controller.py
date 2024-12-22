@@ -28,10 +28,7 @@ def total_data_requests():
 def total_inserter():   
     insert_into_db()
 
-<<<<<<< HEAD
-=======
 from model.modules.db_update import manager_update_date
 
 manager_update_date()
 
->>>>>>> 123aa947d75d40024462cd796a6cc8010a8f30db

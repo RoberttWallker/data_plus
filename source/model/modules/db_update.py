@@ -3,6 +3,7 @@ from sqlalchemy.sql import text
 from datetime import datetime
 from pathlib import Path
 import time
+import json
 
 
 from .db_connector import (
@@ -16,45 +17,69 @@ CONFIG_PATH = MODEL_PATH / "config"
 TEMP_FILE_PATH = MODEL_PATH / "data/temp_file_data"
 
 
-def convert_column_to_date_or_datetime_mysql(conn, table_name, column_name):
-    query = text(f"SELECT DISTINCT {column_name} FROM {table_name} LIMIT 10")
-    result = conn.connection.execute(query)
-
-    formato_exemplo = "%d/%m/%Y %H:%M:%S"
-
-    rows = []
-    for row in result:
-        value = row[0]
-        try:
-            data_formatada = datetime.strptime(value, formato_exemplo)
-        except (ValueError, TypeError):
-            continue
-
-        else:
-            rows.append(data_formatada)
-            print(f"O valor {value} na coluna {column_name} segue o padrao {formato_exemplo}")
-
-    if len(rows) == 10:
-        alter_query = text(f"ALTER TABLE {table_name} MODIFY COLUMN {column_name} DATETIME")
-        conn.connection.execute(alter_query)
-
-
 def update_columns_date_mysql(conn):
     inspector = inspect(conn.engine)
 
+    table_columns = {}
+
     for table_name in inspector.get_table_names():
-        print(f"Verificando a tabela: {table_name}")
 
         columns = inspector.get_columns(table_name)
+        columns_list = []
         for column in columns:
             column_name = column['name']
-            column_type = column['type']
+            columns_list.append(column_name)
+        table_columns[table_name] = columns_list
+    
+    
+    connection = conn.connection
 
-            if isinstance(column_type, Text):
-                # print(f"Verificando coluna: {column_name}")
+    valid_columns_date = []
 
-                convert_column_to_date_or_datetime_mysql(conn, table_name, column_name)
+    for table_, columns_ in table_columns.items():
+        for column_ in columns_:
+            query = text(f"SELECT DISTINCT {column_} FROM {table_} LIMIT 3")
+            result = connection.execute(query)
+            
+            formato_exemplo = "%d/%m/%Y %H:%M:%S"
 
+            rows = [row[0] for row in result]
+
+            # Filtrando valores vazios ou nulos
+            valid_rows = [value for value in rows if value and value.strip()]
+
+
+            try:
+                data = [datetime.strptime(value, formato_exemplo).strftime(formato_exemplo) for value in valid_rows]
+                if data:
+                    valid_columns_date.append((table_, column_))
+                else:
+                    continue
+            except ValueError:
+                continue
+   
+    print(valid_columns_date)
+
+    for table_, column_ in valid_columns_date:
+        query = text(f"SELECT {column_} FROM {table_}")
+        result = connection.execute(query)
+
+        rows = [row[0] for row in result]
+
+        # Filtrando valores vazios ou nulos
+        valid_rows = [value for value in rows if value]# and value != '']
+
+        #print(f"\n{table_} - {column_}:\n{valid_rows}\n")
+        formato_exemplo = "%d/%m/%Y %H:%M:%S"
+        formato_mysql = "%Y-%m-%d %H:%M:%S"
+        for row in valid_rows:
+            try:
+                data_formatada = datetime.strptime(row, formato_exemplo).strftime(formato_mysql)
+                if row != data_formatada:
+                    alter_query = text(f"UPDATE {table_} SET {column_} = :data_formatada WHERE {column_} = :old_value")
+                    connection.execute(alter_query, {'data_formatada': data_formatada, 'old_value': row})
+            except ValueError:
+                continue
 
 def manager_update_date():
     for file in CONFIG_PATH.rglob("db_config/*.json"):

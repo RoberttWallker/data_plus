@@ -9,14 +9,6 @@ from source.controller.controller import (
 def main():
     while True:
         resposta = input('''
-<<<<<<< HEAD
-Escolha uma das opções abaixo:
-    1 - Iniciar criação do banco de dados completo.
-    2 - Gravar configuração de banco de dados.
-    3 - Gravar configuração de nova API.                                                                                
-    >>>'''
-        )
-=======
     Escolha uma das opções abaixo:
     1 - Iniciar criação do banco de dados completo.
     2 - Gravar configuração de banco de dados.
@@ -24,7 +16,6 @@ Escolha uma das opções abaixo:
     Q - Sair                                                                               
     >>>'''
 ).upper()
->>>>>>> 123aa947d75d40024462cd796a6cc8010a8f30db
         if resposta == "1":
             while True:
                 resposta_2 = input('Deseja inserir as configurações de um novo banco de dados? s/n\n>>> ').lower()
