@@ -16,6 +16,24 @@ MODEL_PATH = Path(__file__).absolute().parent.parent
 CONFIG_PATH = MODEL_PATH / "config"
 TEMP_FILE_PATH = MODEL_PATH / "data/temp_file_data"
 
+def preencher_nulos(connection, table_, column_):
+    # Alterar o tipo da coluna para DATETIME
+    try:
+        # Preencher valores nulos ou vazios com uma data padrão
+        preencher_query = text(f"""
+            UPDATE {table_}
+            SET {column_} = '1970-01-01 00:00:00'
+            WHERE {column_} IS NULL OR TRIM({column_}) = '';
+        """)
+        connection.execute(preencher_query)
+        print(f"Valores nulos ou vazios da coluna {column_} na tabela {table_} preenchidos com data padrão.")
+
+        # Alterar o tipo da coluna para DATETIME
+        alter_query = text(f"ALTER TABLE {table_} MODIFY COLUMN {column_} DATETIME")
+        connection.execute(alter_query)
+        print(f"Coluna {column_} na tabela {table_} alterada para DATETIME.")
+    except Exception as e:
+        print(f"Erro ao alterar coluna {column_} na tabela {table_}: {e}")
 
 def update_columns_date_mysql(conn):
     inspector = inspect(conn.engine)
@@ -42,11 +60,12 @@ def update_columns_date_mysql(conn):
             result = connection.execute(query)
             
             formato_exemplo = "%d/%m/%Y %H:%M:%S"
+            formato_mysql = "%Y-%m-%d %H:%M:%S"
 
             rows = [row[0] for row in result]
 
             # Filtrando valores vazios ou nulos
-            valid_rows = [value for value in rows if value and value.strip()]
+            valid_rows = [value for value in rows if value and (not isinstance(value, datetime))]
 
 
             try:
@@ -56,7 +75,14 @@ def update_columns_date_mysql(conn):
                 else:
                     continue
             except ValueError:
-                continue
+                try:
+                    data = [datetime.strptime(value, formato_mysql).strftime(formato_mysql) for value in valid_rows]
+                    if data:
+                        valid_columns_date.append((table_, column_))
+                    else:
+                        continue
+                except:
+                    continue
    
     print(valid_columns_date)
 
@@ -69,17 +95,32 @@ def update_columns_date_mysql(conn):
         # Filtrando valores vazios ou nulos
         valid_rows = [value for value in rows if value]# and value != '']
 
-        #print(f"\n{table_} - {column_}:\n{valid_rows}\n")
-        formato_exemplo = "%d/%m/%Y %H:%M:%S"
-        formato_mysql = "%Y-%m-%d %H:%M:%S"
         for row in valid_rows:
             try:
                 data_formatada = datetime.strptime(row, formato_exemplo).strftime(formato_mysql)
-                if row != data_formatada:
-                    alter_query = text(f"UPDATE {table_} SET {column_} = :data_formatada WHERE {column_} = :old_value")
-                    connection.execute(alter_query, {'data_formatada': data_formatada, 'old_value': row})
+                update_query = text(f"UPDATE {table_} SET {column_} = :data_formatada WHERE {column_} = :old_value")
+                connection.execute(update_query, {'data_formatada': data_formatada, 'old_value': row})
             except ValueError:
-                continue
+                try:
+                    data_formatada = datetime.strptime(row, formato_mysql).strftime(formato_mysql)
+                    update_query = text(f"UPDATE {table_} SET {column_} = :data_formatada WHERE {column_} = :old_value")
+                    connection.execute(update_query, {'data_formatada': data_formatada, 'old_value': row})
+                except:
+                    continue
+        # Alterar o tipo da coluna para DATETIME
+        try:
+            alter_query = text(f"ALTER TABLE {table_} MODIFY COLUMN {column_} DATETIME")
+            connection.execute(alter_query)
+            print(f"Coluna {column_} na tabela {table_} alterada para DATETIME.")
+        except Exception as e:
+            print(f"Erro ao alterar coluna {column_} na tabela {table_}: {e}")
+        
+        preencher_nulos(connection, table_, column_)
+
+        
+
+                    
+
 
 def manager_update_date():
     for file in CONFIG_PATH.rglob("db_config/*.json"):
