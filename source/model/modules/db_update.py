@@ -120,6 +120,47 @@ def update_columns_date_mysql(conn):
         
 
                     
+def get_tables(conn):
+    connection = conn.connection
+    inspector = inspect(conn.engine)
+    tabelas = inspector.get_table_names()
+
+    tabela_colunas = []
+    
+    for tabela in tabelas:
+        colunas = inspector.get_columns(tabela)
+        list_colunas = []
+        for coluna in colunas:
+            list_colunas.append(coluna['name'])
+        tabela_colunas.append((tabela, list_colunas))
+
+    for tabela, colunas in tabela_colunas:
+        for coluna in colunas:
+            try:
+                query = text(f"SELECT DISTINCT {coluna} FROM {tabela} LIMIT 3")
+                result = connection.execute(query)
+                
+                formato_exemplo = "%d/%m/%Y %H:%M:%S"
+                formato_mysql = "%Y-%m-%d %H:%M:%S"
+
+                rows = [row[0] for row in result]
+
+            #     # Filtrando valores vazios ou nulos
+                valid_rows = [value for value in rows if value and isinstance(value, datetime)]
+                print(valid_rows)
+
+            #     valid_colunas_data = []
+            #     try:
+            #         data = [datetime.strptime(value, formato_exemplo).strftime(formato_exemplo) for value in valid_rows]
+            #         if data:
+            #             valid_colunas_data.append((tabela, coluna))
+            #         else:
+            #             continue
+            #     except ValueError:
+            #         continue
+            except Exception as e:
+                print(f"capturado no except exterior : {e}")     
+        
 
 
 def manager_update_date():
@@ -139,4 +180,4 @@ def manager_update_date():
                     config["password"],
                     config["dbname"],
                 )
-                update_columns_date_mysql(conn)
+                get_tables(conn)
