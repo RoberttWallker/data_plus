@@ -16,13 +16,14 @@ MODEL_PATH = Path(__file__).absolute().parent.parent
 CONFIG_PATH = MODEL_PATH / "config"
 TEMP_FILE_PATH = MODEL_PATH / "data/temp_file_data"
 
+
 def preencher_nulos(connection, table_, column_):
     # Alterar o tipo da coluna para DATETIME
     try:
         # Preencher valores nulos ou vazios com uma data padrão
         preencher_query = text(f"""
             UPDATE {table_}
-            SET {column_} = '1970-01-01 00:00:00'
+            SET {column_} = '1970-07-07 07:07:07'
             WHERE {column_} IS NULL OR TRIM({column_}) = '';
         """)
         connection.execute(preencher_query)
@@ -35,92 +36,108 @@ def preencher_nulos(connection, table_, column_):
     except Exception as e:
         print(f"Erro ao alterar coluna {column_} na tabela {table_}: {e}")
 
-def update_columns_date_mysql(conn):
-    inspector = inspect(conn.engine)
+# def update_columns_date_mysql(conn):
+#     inspector = inspect(conn.engine)
 
-    table_columns = {}
+#     table_columns = {}
 
-    for table_name in inspector.get_table_names():
+#     for table_name in inspector.get_table_names():
 
-        columns = inspector.get_columns(table_name)
-        columns_list = []
-        for column in columns:
-            column_name = column['name']
-            columns_list.append(column_name)
-        table_columns[table_name] = columns_list
+#         columns = inspector.get_columns(table_name)
+#         columns_list = []
+#         for column in columns:
+#             column_name = column['name']
+#             columns_list.append(column_name)
+#         table_columns[table_name] = columns_list
     
     
-    connection = conn.connection
+#     connection = conn.connection
 
-    valid_columns_date = []
+#     valid_columns_date = []
 
-    for table_, columns_ in table_columns.items():
-        for column_ in columns_:
-            query = text(f"SELECT DISTINCT {column_} FROM {table_} LIMIT 3")
-            result = connection.execute(query)
+#     for table_, columns_ in table_columns.items():
+#         for column_ in columns_:
+#             query = text(f"SELECT DISTINCT {column_} FROM {table_} LIMIT 3")
+#             result = connection.execute(query)
             
-            formato_exemplo = "%d/%m/%Y %H:%M:%S"
-            formato_mysql = "%Y-%m-%d %H:%M:%S"
+#             formato_exemplo = "%d/%m/%Y %H:%M:%S"
+#             formato_mysql = "%Y-%m-%d %H:%M:%S"
 
-            rows = [row[0] for row in result]
+#             rows = [row[0] for row in result]
 
-            # Filtrando valores vazios ou nulos
-            valid_rows = [value for value in rows if value and (not isinstance(value, datetime))]
+#             # Filtrando valores vazios ou nulos
+#             valid_rows = [value for value in rows if value and (not isinstance(value, datetime))]
 
 
-            try:
-                data = [datetime.strptime(value, formato_exemplo).strftime(formato_exemplo) for value in valid_rows]
-                if data:
-                    valid_columns_date.append((table_, column_))
-                else:
-                    continue
-            except ValueError:
-                try:
-                    data = [datetime.strptime(value, formato_mysql).strftime(formato_mysql) for value in valid_rows]
-                    if data:
-                        valid_columns_date.append((table_, column_))
-                    else:
-                        continue
-                except:
-                    continue
+#             try:
+#                 data = [datetime.strptime(value, formato_exemplo).strftime(formato_exemplo) for value in valid_rows]
+#                 if data:
+#                     valid_columns_date.append((table_, column_))
+#                 else:
+#                     continue
+#             except ValueError:
+#                 try:
+#                     data = [datetime.strptime(value, formato_mysql).strftime(formato_mysql) for value in valid_rows]
+#                     if data:
+#                         valid_columns_date.append((table_, column_))
+#                     else:
+#                         continue
+#                 except:
+#                     continue
    
-    print(valid_columns_date)
+#     print(valid_columns_date)
 
-    for table_, column_ in valid_columns_date:
-        query = text(f"SELECT {column_} FROM {table_}")
-        result = connection.execute(query)
+#     for table_, column_ in valid_columns_date:
+#         query = text(f"SELECT {column_} FROM {table_}")
+#         result = connection.execute(query)
 
-        rows = [row[0] for row in result]
+#         rows = [row[0] for row in result]
 
-        # Filtrando valores vazios ou nulos
-        valid_rows = [value for value in rows if value]# and value != '']
+#         # Filtrando valores vazios ou nulos
+#         valid_rows = [value for value in rows if value]# and value != '']
 
-        for row in valid_rows:
-            try:
-                data_formatada = datetime.strptime(row, formato_exemplo).strftime(formato_mysql)
-                update_query = text(f"UPDATE {table_} SET {column_} = :data_formatada WHERE {column_} = :old_value")
-                connection.execute(update_query, {'data_formatada': data_formatada, 'old_value': row})
-            except ValueError:
-                try:
-                    data_formatada = datetime.strptime(row, formato_mysql).strftime(formato_mysql)
-                    update_query = text(f"UPDATE {table_} SET {column_} = :data_formatada WHERE {column_} = :old_value")
-                    connection.execute(update_query, {'data_formatada': data_formatada, 'old_value': row})
-                except:
-                    continue
-        # Alterar o tipo da coluna para DATETIME
-        try:
-            alter_query = text(f"ALTER TABLE {table_} MODIFY COLUMN {column_} DATETIME")
-            connection.execute(alter_query)
-            print(f"Coluna {column_} na tabela {table_} alterada para DATETIME.")
-        except Exception as e:
-            print(f"Erro ao alterar coluna {column_} na tabela {table_}: {e}")
+#         for row in valid_rows:
+#             try:
+#                 data_formatada = datetime.strptime(row, formato_exemplo).strftime(formato_mysql)
+#                 update_query = text(f"UPDATE {table_} SET {column_} = :data_formatada WHERE {column_} = :old_value")
+#                 connection.execute(update_query, {'data_formatada': data_formatada, 'old_value': row})
+#             except ValueError:
+#                 try:
+#                     data_formatada = datetime.strptime(row, formato_mysql).strftime(formato_mysql)
+#                     update_query = text(f"UPDATE {table_} SET {column_} = :data_formatada WHERE {column_} = :old_value")
+#                     connection.execute(update_query, {'data_formatada': data_formatada, 'old_value': row})
+#                 except:
+#                     continue
+#         # Alterar o tipo da coluna para DATETIME
+#         try:
+#             alter_query = text(f"ALTER TABLE {table_} MODIFY COLUMN {column_} DATETIME")
+#             connection.execute(alter_query)
+#             print(f"Coluna {column_} na tabela {table_} alterada para DATETIME.")
+#         except Exception as e:
+#             print(f"Erro ao alterar coluna {column_} na tabela {table_}: {e}")
         
-        preencher_nulos(connection, table_, column_)
+#         preencher_nulos(connection, table_, column_)
 
-        
 
-                    
-def get_tables(conn):
+def criar_col_atualizacao_incremental_pbi():
+    perfis = []
+    while True:
+        tabela_ = input(f'{"-"*56}\nCopie e cole a tabela (ou digite "sair" para encerrar): ')
+        time.sleep(1)
+        if tabela_.strip().lower() == "sair":
+            break
+        coluna_ = input('Agora insira a coluna que será usada para atualização incremental no Power BI: ')
+        time.sleep(1)
+        if not tabela_ or not coluna_:
+            print("Tabela ou coluna não podem estar vazios. Tente novamente.")
+            time.sleep(1)
+            continue
+        tbl_col = {tabela_: coluna_}
+        perfis.append(tbl_col)
+        print(f"\nPerfil adicionado: {tbl_col}\n{'-'*(len(str(tbl_col))+19)}")
+    return perfis
+
+def get_tables_columns_date(conn):
     connection = conn.connection
     inspector = inspect(conn.engine)
     tabelas = inspector.get_table_names()
@@ -134,10 +151,12 @@ def get_tables(conn):
             list_colunas.append(coluna['name'])
         tabela_colunas.append((tabela, list_colunas))
 
+    tabela_colunas_de_data = []
     for tabela, colunas in tabela_colunas:
+        colunas_de_data = []
         for coluna in colunas:
             try:
-                query = text(f"SELECT DISTINCT {coluna} FROM {tabela} LIMIT 3")
+                query = text(f"SELECT DISTINCT {coluna} FROM {tabela} LIMIT 2")
                 result = connection.execute(query)
                 
                 formato_exemplo = "%d/%m/%Y %H:%M:%S"
@@ -145,23 +164,26 @@ def get_tables(conn):
 
                 rows = [row[0] for row in result]
 
-            #     # Filtrando valores vazios ou nulos
-                valid_rows = [value for value in rows if value and isinstance(value, datetime)]
-                print(valid_rows)
+                for value in rows:
+                    if value and isinstance(value, datetime):
+                        print(f"FORMATO DATETIME: {tabela} - {coluna} - {value}")
+                    elif value:
+                        try:
+                            formatado = datetime.strptime(value, formato_exemplo).strftime(formato_exemplo)
+                            #print(f"FORMATO STR: {tabela} - {coluna} - {formatado}")
+                            if coluna not in colunas_de_data:
+                                colunas_de_data.append(coluna)
+                        except ValueError:
+                            continue
+                    else:
+                        continue
 
-            #     valid_colunas_data = []
-            #     try:
-            #         data = [datetime.strptime(value, formato_exemplo).strftime(formato_exemplo) for value in valid_rows]
-            #         if data:
-            #             valid_colunas_data.append((tabela, coluna))
-            #         else:
-            #             continue
-            #     except ValueError:
-            #         continue
             except Exception as e:
                 print(f"capturado no except exterior : {e}")     
         
-
+        tabela_colunas_de_data.append((tabela, colunas_de_data))
+    #print(f"\n{'*'*32}\n{tabela_colunas_de_data}")
+    return tabela_colunas_de_data      
 
 def manager_update_date():
     for file in CONFIG_PATH.rglob("db_config/*.json"):
@@ -180,4 +202,50 @@ def manager_update_date():
                     config["password"],
                     config["dbname"],
                 )
-                get_tables(conn)
+                tabelas_e_colunas_de_datas = get_tables_columns_date(conn)
+
+                for tabela, colunas in tabelas_e_colunas_de_datas:
+                    print(f"Tabela: {tabela}")
+                    if colunas:
+                        print(f"    Colunas:")
+                        for coluna in colunas:
+                            print(f"    - {coluna}")
+                
+                
+                tabelas_colunas_atualizar = criar_col_atualizacao_incremental_pbi()
+                while True:
+                    resposta = input(f'''\n
+Confirme se essas são as tabelas e respectivas colunas que quer atualizar:
+    \n{tabelas_colunas_atualizar}\n
+(s/n)>>> ''').strip().lower()
+                    if resposta == 's':
+                        print('Continuando...\n')
+                        time.sleep(1)
+                        break
+                    elif resposta == 'n':
+                        print('Repetindo...\n')
+                        time.sleep(1)
+                        tabelas_colunas_atualizar = criar_col_atualizacao_incremental_pbi()
+                    else:
+                        print('Opção inválida. Tente novamente...')
+
+                for perfil in tabelas_colunas_atualizar:
+                    # Usar next(iter(...)) é uma maneira eficiente e direta
+                    # de acessar o primeiro item de um iterável.
+                    tabela, coluna = next(iter(perfil.items()))
+
+                    query = text(f"SELECT {coluna} FROM {tabela}")
+                    result = conn.connection.execute(query) # type: ignore
+
+                    rows = [row[0] for row in result]
+
+                    # Filtrando valores vazios ou nulos
+                    valid_rows = [value for value in rows if value]# and value != '']
+                    
+                    formato_exemplo = "%d/%m/%Y %H:%M:%S"
+                    formato_mysql = "%Y-%m-%d %H:%M:%S"
+                    
+                    for row in valid_rows:
+                        pass
+                
+                    
