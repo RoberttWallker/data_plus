@@ -23,18 +23,41 @@ def preencher_nulos(connection, table_, column_):
         # Preencher valores nulos ou vazios com uma data padrão
         preencher_query = text(f"""
             UPDATE {table_}
-            SET {column_} = '1970-07-07 07:07:07'
+            SET {column_} = '07/07/1970 07:07:07'
             WHERE {column_} IS NULL OR TRIM({column_}) = '';
         """)
         connection.execute(preencher_query)
         print(f"Valores nulos ou vazios da coluna {column_} na tabela {table_} preenchidos com data padrão.")
+        connection.commit()
 
-        # Alterar o tipo da coluna para DATETIME
-        alter_query = text(f"ALTER TABLE {table_} MODIFY COLUMN {column_} DATETIME")
-        connection.execute(alter_query)
-        print(f"Coluna {column_} na tabela {table_} alterada para DATETIME.")
+    #     # Alterar o tipo da coluna para DATETIME
+    #     alter_query = text(f"ALTER TABLE {table_} MODIFY COLUMN {column_} DATETIME")
+    #     connection.execute(alter_query)
+    #     print(f"Coluna {column_} na tabela {table_} alterada para DATETIME.")
     except Exception as e:
         print(f"Erro ao alterar coluna {column_} na tabela {table_}: {e}")
+
+def alterar_formato_data(conn, table_, column_):
+    connection = conn.connection
+    formato_fonte = "%d/%m/%Y %H:%M:%S"
+
+    if conn.dialect == "mysql":
+        formato_mysql = "%Y-%m-%d %H:%M:%S"
+        try:
+
+            update_query = text(f"""
+                UPDATE {table_}
+                SET {column_} = 
+                    DATE_FORMAT(STR_TO_DATE({column_}, :formato_fonte), :formato_mysql)
+                WHERE {column_} IS NOT NULL;
+            """)
+            connection.execute(update_query, {'formato_fonte': formato_fonte, 'formato_mysql': formato_mysql})
+            connection.commit()
+            print(f"Coluna '{column_}' da tabela '{table_}' atualizada com sucesso!")
+        except Exception as e:
+            print(f"Erro ao atualizar coluna '{column_}' na tabela '{table_}': {e}")
+    
+
 
 # def update_columns_date_mysql(conn):
 #     inspector = inspect(conn.engine)
@@ -203,7 +226,7 @@ def manager_update_date():
                     config["dbname"],
                 )
                 tabelas_e_colunas_de_datas = get_tables_columns_date(conn)
-
+                #print(f"TESTE AQUI DIALETC: {conn.dialect}")
                 for tabela, colunas in tabelas_e_colunas_de_datas:
                     print(f"Tabela: {tabela}")
                     if colunas:
@@ -234,18 +257,4 @@ Confirme se essas são as tabelas e respectivas colunas que quer atualizar:
                     # de acessar o primeiro item de um iterável.
                     tabela, coluna = next(iter(perfil.items()))
 
-                    query = text(f"SELECT {coluna} FROM {tabela}")
-                    result = conn.connection.execute(query) # type: ignore
-
-                    rows = [row[0] for row in result]
-
-                    # Filtrando valores vazios ou nulos
-                    valid_rows = [value for value in rows if value]# and value != '']
-                    
-                    formato_exemplo = "%d/%m/%Y %H:%M:%S"
-                    formato_mysql = "%Y-%m-%d %H:%M:%S"
-                    
-                    for row in valid_rows:
-                        pass
-                
-                    
+                    alterar_formato_data(conn, tabela, coluna)

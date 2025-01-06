@@ -31,4 +31,3 @@ def total_inserter():
 from model.modules.db_update import manager_update_date, get_tables_columns_date
 
 manager_update_date()
-
