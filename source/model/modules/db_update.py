@@ -17,42 +17,48 @@ CONFIG_PATH = MODEL_PATH / "config"
 TEMP_FILE_PATH = MODEL_PATH / "data/temp_file_data"
 
 
-def preencher_nulos(connection, table_, column_):
+def preencher_nulos(conn, table_, column_):
+    connection = conn.connection
     # Alterar o tipo da coluna para DATETIME
     try:
         # Preencher valores nulos ou vazios com uma data padrão
         preencher_query = text(f"""
             UPDATE {table_}
-            SET {column_} = '07/07/1970 07:07:07'
-            WHERE {column_} IS NULL OR TRIM({column_}) = '';
+            SET {column_} = NULL
+            WHERE TRIM({column_}) = '';
         """)
         connection.execute(preencher_query)
-        print(f"Valores nulos ou vazios da coluna {column_} na tabela {table_} preenchidos com data padrão.")
+        print(f"Valores nulos atribuidos aos vazios na coluna {column_} na tabela {table_}")
         connection.commit()
 
-    #     # Alterar o tipo da coluna para DATETIME
-    #     alter_query = text(f"ALTER TABLE {table_} MODIFY COLUMN {column_} DATETIME")
-    #     connection.execute(alter_query)
-    #     print(f"Coluna {column_} na tabela {table_} alterada para DATETIME.")
     except Exception as e:
         print(f"Erro ao alterar coluna {column_} na tabela {table_}: {e}")
 
 def alterar_formato_data(conn, table_, column_):
     connection = conn.connection
-    formato_fonte = "%d/%m/%Y %H:%M:%S"
+    # Formato atual das strings, reconhecido no MYSQL
+    # tem de ser usado esses padrões para ser reconhecido no MYSQL
+    formato_fonte = "%d/%m/%Y %H:%i:%s"
 
     if conn.dialect == "mysql":
-        formato_mysql = "%Y-%m-%d %H:%M:%S"
+        formato_mysql = "%Y-%m-%d %H:%i:%s"
         try:
 
             update_query = text(f"""
                 UPDATE {table_}
-                SET {column_} = 
-                    DATE_FORMAT(STR_TO_DATE({column_}, :formato_fonte), :formato_mysql)
+                SET {column_} = DATE_FORMAT(STR_TO_DATE({column_}, :formato_fonte), :formato_mysql)
                 WHERE {column_} IS NOT NULL;
             """)
+
+            alter_query = text(f"""
+                ALTER TABLE {table_}
+                MODIFY {column_} DATETIME;
+            """)
+
             connection.execute(update_query, {'formato_fonte': formato_fonte, 'formato_mysql': formato_mysql})
+            connection.execute(alter_query)
             connection.commit()
+
             print(f"Coluna '{column_}' da tabela '{table_}' atualizada com sucesso!")
         except Exception as e:
             print(f"Erro ao atualizar coluna '{column_}' na tabela '{table_}': {e}")
@@ -234,7 +240,6 @@ def manager_update_date():
                         for coluna in colunas:
                             print(f"    - {coluna}")
                 
-                
                 tabelas_colunas_atualizar = criar_col_atualizacao_incremental_pbi()
                 while True:
                     resposta = input(f'''\n
@@ -256,5 +261,7 @@ Confirme se essas são as tabelas e respectivas colunas que quer atualizar:
                     # Usar next(iter(...)) é uma maneira eficiente e direta
                     # de acessar o primeiro item de um iterável.
                     tabela, coluna = next(iter(perfil.items()))
+
+                    preencher_nulos(conn, tabela, coluna)
 
                     alterar_formato_data(conn, tabela, coluna)
