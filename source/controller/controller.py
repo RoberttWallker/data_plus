@@ -9,6 +9,7 @@ import os
 from model.modules.api_connector import request_config, request_memory_saving
 from model.modules.db_connector import create_connection_db
 from model.modules.db_inserter import insert_into_db
+from model.modules.db_update import manager_update_date
 
 local_host_name = socket.gethostname()
 local_user_name = os.getlogin()
@@ -28,6 +29,7 @@ def total_data_requests():
 def total_inserter():   
     insert_into_db()
 
-from model.modules.db_update import manager_update_date, get_tables_columns_date
+def create_column_incremental():
+    manager_update_date()
 
-manager_update_date()
+create_column_incremental()

@@ -3,7 +3,6 @@ from sqlalchemy.sql import text
 from datetime import datetime
 from pathlib import Path
 import time
-import json
 
 
 from .db_connector import (
@@ -17,16 +16,77 @@ CONFIG_PATH = MODEL_PATH / "config"
 TEMP_FILE_PATH = MODEL_PATH / "data/temp_file_data"
 
 
+def alterar_coluna_para_datetime_mysql(connection_, table_, column_):
+    # Formato atual das strings, reconhecido no MYSQL
+    # tem de ser usado esses padrões para ser reconhecido no MYSQL
+    formato_fonte = "%d/%m/%Y %H:%i:%s"
+    formato_mysql = "%Y-%m-%d %H:%i:%s"
+    try:
+
+        update_query = text(f"""
+            UPDATE {table_}
+            SET {column_} = DATE_FORMAT(STR_TO_DATE({column_}, :formato_fonte), :formato_mysql)
+            WHERE {column_} IS NOT NULL;
+        """)
+
+        alter_query = text(f"""
+            ALTER TABLE {table_}
+            MODIFY {column_} DATETIME;
+        """)
+
+        connection_.execute(update_query, {'formato_fonte': formato_fonte, 'formato_mysql': formato_mysql})
+        connection_.execute(alter_query)
+        connection_.commit()
+
+        print(f"Coluna '{column_}' da tabela '{table_}' atualizada com sucesso!")
+    except Exception as e:
+        print(f"Erro ao atualizar coluna '{column_}' na tabela '{table_}': {e}")
+
+def alterar_coluna_para_datetime_postgresql(connection_, table_, column_):
+    # Formato atual das strings, reconhecido no MYSQL
+    # tem de ser usado esses padrões para ser reconhecido no MYSQL
+    formato_fonte = "%d/%m/%Y %H:%M:%S"
+    formato_mysql = "%Y-%m-%d %H:%i:%s"
+    try:
+
+        update_query = text(f'''
+            UPDATE "{table_}"
+            SET "{column_}" = TO_TIMESTAMP("{column_}", :formato_fonte)
+            WHERE "{column_}" IS NOT NULL;
+        ''')
+
+        alter_query = text(f'''
+            ALTER TABLE "{table_}"
+            ALTER COLUMN "{column_}" TYPE TIMESTAMP USING "{column_}"::TIMESTAMP;
+        ''')
+
+        connection_.execute(update_query, {'formato_fonte': formato_fonte, 'formato_mysql': formato_mysql})
+        connection_.execute(alter_query)
+        connection_.commit()
+
+        print(f"Coluna '{column_}' da tabela '{table_}' atualizada com sucesso!")
+    except Exception as e:
+        print(f"Erro ao atualizar coluna '{column_}' na tabela '{table_}': {e}")
+
 def preencher_nulos(conn, table_, column_):
     connection = conn.connection
+    dialect = conn.dialect
     # Alterar o tipo da coluna para DATETIME
     try:
         # Preencher valores nulos ou vazios com uma data padrão
-        preencher_query = text(f"""
-            UPDATE {table_}
-            SET {column_} = NULL
-            WHERE TRIM({column_}) = '';
-        """)
+        if dialect == "mysql":
+            preencher_query = text(f"""
+                UPDATE {table_}
+                SET {column_} = NULL
+                WHERE TRIM({column_}) = '';
+            """)
+        elif dialect == "postgresql":
+            preencher_query = text(f'''
+                UPDATE "{table_}"
+                SET "{column_}" = NULL
+                WHERE TRIM("{column_}") = '';
+            ''')
+
         connection.execute(preencher_query)
         print(f"Valores nulos atribuidos aos vazios na coluna {column_} na tabela {table_}")
         connection.commit()
@@ -36,117 +96,10 @@ def preencher_nulos(conn, table_, column_):
 
 def alterar_formato_data(conn, table_, column_):
     connection = conn.connection
-    # Formato atual das strings, reconhecido no MYSQL
-    # tem de ser usado esses padrões para ser reconhecido no MYSQL
-    formato_fonte = "%d/%m/%Y %H:%i:%s"
-
     if conn.dialect == "mysql":
-        formato_mysql = "%Y-%m-%d %H:%i:%s"
-        try:
-
-            update_query = text(f"""
-                UPDATE {table_}
-                SET {column_} = DATE_FORMAT(STR_TO_DATE({column_}, :formato_fonte), :formato_mysql)
-                WHERE {column_} IS NOT NULL;
-            """)
-
-            alter_query = text(f"""
-                ALTER TABLE {table_}
-                MODIFY {column_} DATETIME;
-            """)
-
-            connection.execute(update_query, {'formato_fonte': formato_fonte, 'formato_mysql': formato_mysql})
-            connection.execute(alter_query)
-            connection.commit()
-
-            print(f"Coluna '{column_}' da tabela '{table_}' atualizada com sucesso!")
-        except Exception as e:
-            print(f"Erro ao atualizar coluna '{column_}' na tabela '{table_}': {e}")
-    
-
-
-# def update_columns_date_mysql(conn):
-#     inspector = inspect(conn.engine)
-
-#     table_columns = {}
-
-#     for table_name in inspector.get_table_names():
-
-#         columns = inspector.get_columns(table_name)
-#         columns_list = []
-#         for column in columns:
-#             column_name = column['name']
-#             columns_list.append(column_name)
-#         table_columns[table_name] = columns_list
-    
-    
-#     connection = conn.connection
-
-#     valid_columns_date = []
-
-#     for table_, columns_ in table_columns.items():
-#         for column_ in columns_:
-#             query = text(f"SELECT DISTINCT {column_} FROM {table_} LIMIT 3")
-#             result = connection.execute(query)
-            
-#             formato_exemplo = "%d/%m/%Y %H:%M:%S"
-#             formato_mysql = "%Y-%m-%d %H:%M:%S"
-
-#             rows = [row[0] for row in result]
-
-#             # Filtrando valores vazios ou nulos
-#             valid_rows = [value for value in rows if value and (not isinstance(value, datetime))]
-
-
-#             try:
-#                 data = [datetime.strptime(value, formato_exemplo).strftime(formato_exemplo) for value in valid_rows]
-#                 if data:
-#                     valid_columns_date.append((table_, column_))
-#                 else:
-#                     continue
-#             except ValueError:
-#                 try:
-#                     data = [datetime.strptime(value, formato_mysql).strftime(formato_mysql) for value in valid_rows]
-#                     if data:
-#                         valid_columns_date.append((table_, column_))
-#                     else:
-#                         continue
-#                 except:
-#                     continue
-   
-#     print(valid_columns_date)
-
-#     for table_, column_ in valid_columns_date:
-#         query = text(f"SELECT {column_} FROM {table_}")
-#         result = connection.execute(query)
-
-#         rows = [row[0] for row in result]
-
-#         # Filtrando valores vazios ou nulos
-#         valid_rows = [value for value in rows if value]# and value != '']
-
-#         for row in valid_rows:
-#             try:
-#                 data_formatada = datetime.strptime(row, formato_exemplo).strftime(formato_mysql)
-#                 update_query = text(f"UPDATE {table_} SET {column_} = :data_formatada WHERE {column_} = :old_value")
-#                 connection.execute(update_query, {'data_formatada': data_formatada, 'old_value': row})
-#             except ValueError:
-#                 try:
-#                     data_formatada = datetime.strptime(row, formato_mysql).strftime(formato_mysql)
-#                     update_query = text(f"UPDATE {table_} SET {column_} = :data_formatada WHERE {column_} = :old_value")
-#                     connection.execute(update_query, {'data_formatada': data_formatada, 'old_value': row})
-#                 except:
-#                     continue
-#         # Alterar o tipo da coluna para DATETIME
-#         try:
-#             alter_query = text(f"ALTER TABLE {table_} MODIFY COLUMN {column_} DATETIME")
-#             connection.execute(alter_query)
-#             print(f"Coluna {column_} na tabela {table_} alterada para DATETIME.")
-#         except Exception as e:
-#             print(f"Erro ao alterar coluna {column_} na tabela {table_}: {e}")
-        
-#         preencher_nulos(connection, table_, column_)
-
+        alterar_coluna_para_datetime_mysql(connection, table_, column_)
+    elif conn.dialect == "postgresql":
+        alterar_coluna_para_datetime_postgresql(connection, table_, column_)
 
 def criar_col_atualizacao_incremental_pbi():
     perfis = []
@@ -170,6 +123,7 @@ def get_tables_columns_date(conn):
     connection = conn.connection
     inspector = inspect(conn.engine)
     tabelas = inspector.get_table_names()
+    dialect = conn.dialect
 
     tabela_colunas = []
     
@@ -185,17 +139,21 @@ def get_tables_columns_date(conn):
         colunas_de_data = []
         for coluna in colunas:
             try:
-                query = text(f"SELECT DISTINCT {coluna} FROM {tabela} LIMIT 2")
+                if dialect == "mysql":
+                    query = text(f"SELECT DISTINCT {coluna} FROM {tabela} LIMIT 2")
+                elif dialect == "postgresql":
+                    query = text(f'SELECT DISTINCT "{coluna}" FROM "{tabela}" LIMIT 2')
+
                 result = connection.execute(query)
                 
                 formato_exemplo = "%d/%m/%Y %H:%M:%S"
-                formato_mysql = "%Y-%m-%d %H:%M:%S"
 
                 rows = [row[0] for row in result]
 
                 for value in rows:
                     if value and isinstance(value, datetime):
-                        print(f"FORMATO DATETIME: {tabela} - {coluna} - {value}")
+                        continue
+                        #print(f"FORMATO DATETIME: {tabela} - {coluna} - {value}")
                     elif value:
                         try:
                             formatado = datetime.strptime(value, formato_exemplo).strftime(formato_exemplo)
@@ -214,54 +172,136 @@ def get_tables_columns_date(conn):
     #print(f"\n{'*'*32}\n{tabela_colunas_de_data}")
     return tabela_colunas_de_data      
 
-def manager_update_date():
-    for file in CONFIG_PATH.rglob("db_config/*.json"):
-        db_configs = load_config_file(file)
-        for config in db_configs:
+def update_(file):
+    db_configs = load_config_file(file)
+    
+    for config in db_configs:
+        print("\nIniciando...")
+        time.sleep(1)
+        print(f"\nEssas são as configuraçãoes do banco de dados:\n{config}\n")
+        time.sleep(1)
+        if file.name == "db_config_mysql.json":
+            conn = mysql_connection(
+                config["host"],
+                config["port"],
+                config["user"],
+                config["password"],
+                config["dbname"],
+            )
+        elif file.name == "db_config_postgresql.json":
+            conn = postgresql_connection(
+                config["host"],
+                config["port"],
+                config["user"],
+                config["password"],
+                config["dbname"],
+            )
 
-            print("\nIniciando...")
-            if file.name == "db_config_mysql.json":
-                time.sleep(1)
-                print(f"\nEssas são as configuraçãoes do banco de dados:\n{config}\n")
-                time.sleep(1)
-                conn = mysql_connection(
-                    config["host"],
-                    config["port"],
-                    config["user"],
-                    config["password"],
-                    config["dbname"],
-                )
-                tabelas_e_colunas_de_datas = get_tables_columns_date(conn)
-                #print(f"TESTE AQUI DIALETC: {conn.dialect}")
-                for tabela, colunas in tabelas_e_colunas_de_datas:
-                    print(f"Tabela: {tabela}")
-                    if colunas:
-                        print(f"    Colunas:")
-                        for coluna in colunas:
-                            print(f"    - {coluna}")
-                
-                tabelas_colunas_atualizar = criar_col_atualizacao_incremental_pbi()
-                while True:
-                    resposta = input(f'''\n
+        tabelas_e_colunas_de_datas = get_tables_columns_date(conn)
+        #print(f"TESTE AQUI DIALETC: {conn.dialect}")
+        for tabela, colunas in tabelas_e_colunas_de_datas:
+            print(f"Tabela: {tabela}")
+            if colunas:
+                print(f"    Colunas:")
+                for coluna in colunas:
+                    print(f"    - {coluna}")
+            elif not colunas:
+                print(f"    Sem colunas no formato correto.")
+        
+        tabelas_colunas_atualizar = criar_col_atualizacao_incremental_pbi()
+        while True:
+            resposta = input(f'''\n
 Confirme se essas são as tabelas e respectivas colunas que quer atualizar:
     \n{tabelas_colunas_atualizar}\n
 (s/n)>>> ''').strip().lower()
-                    if resposta == 's':
-                        print('Continuando...\n')
-                        time.sleep(1)
-                        break
-                    elif resposta == 'n':
-                        print('Repetindo...\n')
-                        time.sleep(1)
-                        tabelas_colunas_atualizar = criar_col_atualizacao_incremental_pbi()
-                    else:
-                        print('Opção inválida. Tente novamente...')
+            if resposta == 's':
+                print('Continuando...\n')
+                time.sleep(1)
+                break
+            elif resposta == 'n':
+                print('Repetindo...\n')
+                time.sleep(1)
+                tabelas_colunas_atualizar = criar_col_atualizacao_incremental_pbi()
+            else:
+                print('Opção inválida. Tente novamente...')
 
-                for perfil in tabelas_colunas_atualizar:
-                    # Usar next(iter(...)) é uma maneira eficiente e direta
-                    # de acessar o primeiro item de um iterável.
-                    tabela, coluna = next(iter(perfil.items()))
+        for perfil in tabelas_colunas_atualizar:
+            # Usar next(iter(...)) é uma maneira eficiente e direta
+            # de acessar o primeiro item de um iterável.
+            tabela, coluna = next(iter(perfil.items()))
 
-                    preencher_nulos(conn, tabela, coluna)
+            preencher_nulos(conn, tabela, coluna)
 
-                    alterar_formato_data(conn, tabela, coluna)
+            alterar_formato_data(conn, tabela, coluna)
+
+def manager_update_date():
+
+    count = len(list(CONFIG_PATH.rglob("db_config/*.json")))
+    if count > 1:
+        file_list = list(CONFIG_PATH.rglob("db_config/*.json"))
+        print(f"Existe mais de um SGBD configurado, qual deles você deseja usar?\n")
+        for idx, file in enumerate(file_list):
+            print(f"{idx} - {file.name}")
+        
+        while True:
+            escolha = int(input(f"Qual dos SGBDs você deseja configurar?\n>>> ").strip())
+            if escolha in range(len(file_list)):
+                file = file_list[escolha]
+                break
+            else:
+                print("Índice inválido. Tente novamente.")
+        update_(file)
+    else:
+        for file in CONFIG_PATH.rglob("db_config/*.json"):
+            update_(file)
+#         db_configs = load_config_file(file)
+        
+#         for config in db_configs:
+#             print("\nIniciando...")
+#             if file.name == "db_config_mysql.json":
+#                 time.sleep(1)
+#                 print(f"\nEssas são as configuraçãoes do banco de dados:\n{config}\n")
+#                 time.sleep(1)
+#                 conn = mysql_connection(
+#                     config["host"],
+#                     config["port"],
+#                     config["user"],
+#                     config["password"],
+#                     config["dbname"],
+#                 )
+#                 tabelas_e_colunas_de_datas = get_tables_columns_date(conn)
+#                 #print(f"TESTE AQUI DIALETC: {conn.dialect}")
+#                 for tabela, colunas in tabelas_e_colunas_de_datas:
+#                     print(f"Tabela: {tabela}")
+#                     if colunas:
+#                         print(f"    Colunas:")
+#                         for coluna in colunas:
+#                             print(f"    - {coluna}")
+#                     elif not colunas:
+#                         print(f"    Sem colunas no formato correto.")
+                
+#                 tabelas_colunas_atualizar = criar_col_atualizacao_incremental_pbi()
+#                 while True:
+#                     resposta = input(f'''\n
+# Confirme se essas são as tabelas e respectivas colunas que quer atualizar:
+#     \n{tabelas_colunas_atualizar}\n
+# (s/n)>>> ''').strip().lower()
+#                     if resposta == 's':
+#                         print('Continuando...\n')
+#                         time.sleep(1)
+#                         break
+#                     elif resposta == 'n':
+#                         print('Repetindo...\n')
+#                         time.sleep(1)
+#                         tabelas_colunas_atualizar = criar_col_atualizacao_incremental_pbi()
+#                     else:
+#                         print('Opção inválida. Tente novamente...')
+
+#                 for perfil in tabelas_colunas_atualizar:
+#                     # Usar next(iter(...)) é uma maneira eficiente e direta
+#                     # de acessar o primeiro item de um iterável.
+#                     tabela, coluna = next(iter(perfil.items()))
+
+#                     preencher_nulos(conn, tabela, coluna)
+
+#                     alterar_formato_data(conn, tabela, coluna)

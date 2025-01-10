@@ -3,7 +3,8 @@ from source.controller.controller import (
     init_creation_db,
     init_creation_requests,
     total_data_requests,
-    total_inserter
+    total_inserter,
+    create_column_incremental
 )
 
 def main():
@@ -12,7 +13,8 @@ def main():
 Escolha uma das opções abaixo:
 1 - Iniciar criação do banco de dados completo.
 2 - Gravar configuração de banco de dados.
-3 - Gravar configuração de nova API. 
+3 - Gravar configuração de nova API.
+4 - Criar colunas para atualização incremental no Power BI.
 Q - Sair                                                                               
 >>> '''
 ).upper()
@@ -57,6 +59,9 @@ Q - Sair
 
         elif resposta == "3":
             init_creation_requests()
+        
+        elif resposta == "4":
+            create_column_incremental()
 
         elif resposta == "Q":
             print("Encerrando...")
