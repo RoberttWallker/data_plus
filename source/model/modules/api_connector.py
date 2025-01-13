@@ -52,7 +52,6 @@ def save_requests_config(conexao_api, unidade_api):
     with open(file_name, "w") as file:
         json.dump(requests_config, file, indent=4)
 
-
 def request_config():
     print("Insira os dados solicitados para configurar a consulta da API")
     while True:
@@ -106,7 +105,6 @@ def request_config():
                 print("Opção incorreta, tente novamente.\n")
                 time.sleep(1)
 
-
 # Tipos de requests
 def full_requests(config, temp_file):
     headers = {
@@ -128,7 +126,6 @@ def full_requests(config, temp_file):
         raise Exception(
             f"Erro na requisição: {response.status_code} - {response.text}"
         )
-
 
 def chunks_requests(config, data_inicial, data_final, dias_incremento, temp_file):
     
@@ -167,7 +164,6 @@ def chunks_requests(config, data_inicial, data_final, dias_incremento, temp_file
         data_inicial = data_final_periodo
         time.sleep(1)
 
-
 # Métodos de DATA
 def get_initial_date(config):
     data_inicial = None
@@ -195,7 +191,6 @@ def get_initial_date(config):
         print(f"Erro ao converter data: {e}. Verifique o formato.")
 
     return data_inicial
-
 
 # Download de dados das APIs
 def request_memory_saving():
@@ -247,3 +242,21 @@ def request_memory_saving():
             else:
                 print(f"O arquivo para: {config['relative_path']}, já existe na pasta de arquivos temporários.")
 
+def incremental_memory_saving():
+    file_name = file_requests_config
+
+    if not file_name.exists():
+        print("Arquivo de configurações de APIs não existe!")
+        return
+
+    with open(file_name, "r") as file:
+        requests_config = json.load(file)
+
+        for config in requests_config:
+            temp_file = (
+                ROOT_PATH
+                / f"source/model/data/temp_file_data/{config['relative_path']}.json"
+            )
+            
+            if not temp_file.exists():
+                pass
