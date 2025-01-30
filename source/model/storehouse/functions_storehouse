@@ -1,0 +1,12 @@
+# def load_db_config(db_configs):
+#     connections = []
+#     for config in db_configs:
+#         conn = ConfigDB(
+#             config.host,
+#             config.port,
+#             config.user,
+#             config.password,
+#             config.dbname,
+#         )
+#         connections.append(conn)
+#     return connections

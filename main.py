@@ -4,7 +4,8 @@ from source.controller.controller import (
     init_creation_requests,
     total_data_requests,
     total_inserter,
-    create_column_incremental
+    create_column_incremental,
+    init_incremental_update
 )
 
 def main():
@@ -15,6 +16,7 @@ Escolha uma das opções abaixo:
 2 - Gravar configuração de banco de dados.
 3 - Gravar configuração de nova API.
 4 - Criar colunas para atualização incremental no Power BI.
+5 - Fazer atualização incremental.
 Q - Sair                                                                               
 >>> '''
 ).upper()
@@ -62,6 +64,9 @@ Q - Sair
         
         elif resposta == "4":
             create_column_incremental()
+        
+        elif resposta == "5":
+            init_incremental_update()
 
         elif resposta == "Q":
             print("Encerrando...")

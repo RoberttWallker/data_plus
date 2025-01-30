@@ -1,3 +1,5 @@
+no_date_api_list = ["EstoqueAnalitico", "ProdutosCadastrados"]
+
 def delete_temp_files(temp_file_path):
     for item in temp_file_path.glob("*"):
         try:
@@ -11,4 +13,10 @@ def delete_temp_files(temp_file_path):
             print(f"Erro ao remover {item}: {e}")
 
     print("Arquivos e pastas temporárias, removidos com sucesso.")
+
+def formatar_nome_para_root(nome):
+    # Divide o nome pelas sublinhas, capitaliza cada palavra e adiciona "Grid" no final
+    partes = nome.split('_')
+    partes_capitalizadas = [parte.capitalize() for parte in partes]
+    return ''.join(partes_capitalizadas)
 

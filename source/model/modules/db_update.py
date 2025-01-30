@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine, inspect, Table, Column, Text
 from sqlalchemy.sql import text
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 import time
 import json
@@ -15,6 +15,141 @@ MODEL_PATH = Path(__file__).absolute().parent.parent
 CONFIG_PATH = MODEL_PATH / "config"
 TEMP_FILE_PATH = MODEL_PATH / "data/temp_file_data"
 
+def datetime_converter(o):
+    if isinstance(o, datetime):
+        return o.strftime("%Y-%m-%d %H:%M:%S")
+    raise TypeError(f"Object of type {o.__class__.__name__} is not JSON serializable")
+
+
+def formatar_datas_incrementais():
+    #A função tem de receber file carregado json.load(temp_file)
+    def modificar(temp_file, column):
+        if temp_file.exists():
+            file_content = load_config_file(temp_file)
+            for increment in file_content:
+                for row in increment:
+                    data = row[column]
+                    try:
+                        nova_data = datetime.strptime(data, "%d/%m/%Y %H:%M:%S").strftime("%Y-%m-%d %H:%M:%S")
+                        row[column] = nova_data
+                    except ValueError:
+                            print(f"Data inválida encontrada: {data}")
+            
+            # Após as modificações, salva o arquivo novamente
+            with open(temp_file, "w") as outfile:
+                json.dump(file_content, outfile, indent=4, ensure_ascii=False)
+    
+    for file in CONFIG_PATH.rglob("incremental_config/*.json"):
+        incremental_config = load_config_file(file)
+        for db_config in incremental_config:
+            for db_name in db_config:
+                for table_info in db_config[db_name]:
+                    if table_info['table'] == "contas_receber_recebidas":
+                        temp_file = TEMP_FILE_PATH / "APIRelatoriosCR/ContasReceberRecebidasGrid.json"
+                        modificar(temp_file, 'EMISSAO')
+                    elif table_info['table'] == "contas_pagar_pagas":
+                        temp_file = TEMP_FILE_PATH / "APIRelatoriosCR/ContasPagarPagasGrid.json"
+                        modificar(temp_file, 'EMISSAO')
+                    elif table_info['table'] == "produtos_por_os":
+                        temp_file = TEMP_FILE_PATH / "APIRelatoriosCR/ProdutosPorOSGrid.json"
+                        modificar(temp_file, 'DATA')
+                    elif table_info['table'] == "entradas_estoque":
+                        temp_file = TEMP_FILE_PATH / "APIRelatoriosCR/EntradasEstoqueGrid.json"
+                        modificar(temp_file, 'DATAENTRADA')
+
+def get_incremental_date():
+    for file in CONFIG_PATH.rglob("db_config/*.json"):
+        db_configs = load_config_file(file)
+        for config in db_configs:
+            if file.name == "db_config_mysql.json":
+                time.sleep(1)
+                # print(f"\nEssas são as configuraçãoes do banco de dados:\n{config}\n")
+                time.sleep(1)
+                conn = mysql_connection(
+                    config["host"],
+                    config["port"],
+                    config["user"],
+                    config["password"],
+                    config["dbname"],
+                )
+
+                if conn == None:
+                    print("Conexão falhou. Não é possível construir as tabelas.")
+                    break
+                else:
+                    connection = conn.connection
+                    for file in CONFIG_PATH.rglob("incremental_config/*.json"):
+                        if file.name == "incremental_config_mysql.json":
+                            incremental_configs = load_config_file(file)
+                            
+                            table_last_date = []
+                            for config in incremental_configs:
+                                for db_name, dados in config.items():
+                                    if db_name == conn.db_name:
+                                        for table_column in dados:
+                                            
+                                            table = table_column['table']
+                                            column = table_column['column']
+                                            query = text(f"SELECT MAX({column}) FROM {table}")
+                                            result = connection.execute(query).scalar()
+
+                                            if result:
+                                                current_date = datetime.now()
+                                                if current_date.date() > result.date():
+                                                    #max_date = datetime.strftime(result, "%d/%m/%Y")
+                                                    max_date = (result + timedelta(days=1)).strftime("%d/%m/%Y")
+                                                else:
+                                                    max_date = result.strftime("%d/%m/%Y")
+                                            else:
+                                                max_date = None
+
+                                            table_last_date.append((table, max_date))
+
+                            return(table_last_date)
+
+
+            elif file.name == "db_config_postgresql.json":
+                # print(f"\nEssas são as configuraçãoes do db:\n{config}\n")
+                conn = postgresql_connection(
+                    config["host"],
+                    config["port"],
+                    config["user"],
+                    config["password"],
+                    config["dbname"],
+                )
+
+                if conn == None:
+                    print("Conexão falhou. Não é possível construir as tabelas.")
+                    break
+                else:
+                    connection = conn.connection
+                    for file in CONFIG_PATH.rglob("incremental_config/*.json"):
+                        if file.name == "incremental_config_postgresql.json":
+                            incremental_configs = load_config_file(file)
+
+                            table_last_date = []
+                            for config in incremental_configs:
+                                for db_name, dados in config.items():
+                                    if db_name == conn.db_name:
+                                        for table_column in dados:
+                                            
+                                            table = table_column['table']
+                                            column = table_column['column']
+                                            query = text(f"SELECT MAX({column}) FROM {table}")
+                                            result = connection.execute(query).scalar()
+
+                                            if result:
+                                                max_date = datetime.strftime(result, "%d/%m/%Y")
+                                            else:
+                                                max_date = None
+
+                                            table_last_date.append((table, max_date))
+
+                            return(table_last_date)
+            else:
+                print(
+                    "Arquivo fora do padrão, ou SGBD ainda não configurado na ferramenta!"
+                )
 
 def save_incremental_column_config(incremental_config, filename):
 
@@ -27,9 +162,20 @@ def save_incremental_column_config(incremental_config, filename):
     except (FileNotFoundError, json.JSONDecodeError):
         update_configs = []
 
-    for item in update_configs:
-        print(item.keys())
-    update_configs.append(incremental_config)
+    #-----------------------------------------------------
+    for db_name, new_entrie in incremental_config.items():
+        db_found = False
+        for config in update_configs:
+            if db_name in config:
+                config[db_name].extend(new_entrie)
+                db_found = True
+                break
+        if not db_found:
+            update_configs.append(incremental_config)
+    #-----------------------------------------------------
+    # for item in update_configs:
+    #     print(f"FAZENDO TESTE AQUI ####$$${item.keys()}")
+    # update_configs.append(incremental_config)
 
     with open(filename, "w") as file:
         json.dump(update_configs, file, indent=4)

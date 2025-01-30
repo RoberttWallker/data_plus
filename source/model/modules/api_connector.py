@@ -4,15 +4,16 @@ import requests
 import json
 import time
 import traceback
+
+
 from model.modules.classes import ConexaoAPI, UnidadeAPI
+from model.modules.db_update import get_incremental_date
+from model.modules.aux_func_app import formatar_nome_para_root, no_date_api_list
 
 ROOT_PATH = Path.cwd()
 file_requests_config = (
     ROOT_PATH / "source/model/config/requests_config/requests_config.json"
 )
-
-
-no_date_api_list = ["EstoqueAnalitico", "ProdutosCadastrados"]
 
 data_final = datetime.today()
 dias_incremento = timedelta(days=120)
@@ -164,36 +165,127 @@ def chunks_requests(config, data_inicial, data_final, dias_incremento, temp_file
         data_inicial = data_final_periodo
         time.sleep(1)
 
+def incremental_requests(config, data_inicial, data_final, temp_file):
+
+    headers = {
+        "Identificador": config["identificador"],
+        "Authorization": config["authorization"],
+        "Content-Type": "application/json",
+    }
+
+    if config['relative_path'] == 'APIRelatoriosCR/ProdutosPorOSGrid':
+        body = {
+            "DATAINICIAL": data_inicial,
+            "DATAFINAL": data_final,
+            "LOJAS": "1,2,3,4,5,6,7,8,9,10,11,12,15,9000",
+            "MARKUPUNICO": "",
+            "INCIOSEQ": "",
+            "FINALSEQ": "",
+            "TIPOPRODUTO": "|0|1|2|3|4|5|6|7|8|9|10|11|",
+            "SOMENTECONTROLAEST": "T",
+            "MULTIPLOSMARKUPS": ""
+        }
+    
+    elif config['relative_path'] == "APIRelatoriosCR/EntradasEstoqueGrid":
+        body = {
+            "INICIOSEQ": "1",
+            "FINALSEQ": "99999999",
+            "DATAINICIO": data_inicial,
+            "DATAFINAL": data_final
+        }
+
+    elif config['relative_path'] == "APIRelatoriosCR/ContasReceberRecebidasGrid":
+        body = {
+            "FILID": "1",
+            "DUPEMISSAO1": data_inicial,
+            "DUPEMISSAO2": data_final,
+            "PARVENCIMENTO1": None,
+            "PARVENCIMENTO2": None,
+            "RECRECEBIMENTO1": None,
+            "RECRECEBIMENTO2": None,
+            "PAGAMENTOVENDA1": None,
+            "PAGAMENTOVENDA2": None,
+            "TIPOPERIODO": "1",
+            "STATUSRECEBIDO": ""
+        }
+
+    elif config['relative_path'] == "APIRelatoriosCR/ContasPagarPagasGrid":
+        body = {
+            "FILID": "1",
+            "DUPEMISSAO1": data_inicial,
+            "DUPEMISSAO2": data_final,
+            "PARVENCIMENTO1": None,
+            "PARVENCIMENTO2": None,
+            "RECRECEBIMENTO1": None,
+            "RECRECEBIMENTO2": None,
+            "PAGAMENTOVENDA1": None,
+            "PAGAMENTOVENDA2": None,
+            "TIPOPERIODO": "1",
+            "STATUSRECEBIDO": ""
+        }
+
+    response = requests.post(
+        f"{config['url_base']}{config['relative_path']}",
+        headers=headers,
+        json=body,
+        stream=True,
+    )
+    if response.status_code == 200:
+        data = response.json()
+
+        json.dump(data, temp_file, ensure_ascii=False)
+    else:
+        raise Exception(
+            f"Erro na requisição: {response.status_code} - {response.text}"
+        )
+    
 # Métodos de DATA
-def get_initial_date(config):
+def get_initial_date(config, incremental_date=False):
     data_inicial = None
-    try:
-        if "ProdutosPorOS" in config["relative_path"]:
-            data_inicial = datetime.strptime(
-                config["body"]["DATAINICIAL"], "%d/%m/%Y"
-            )
-        elif "EntradasEstoque" in config["relative_path"]:
-            data_inicial = datetime.strptime(
-                config["body"]["DATAINICIO"], "%d/%m/%Y"
-            )
-        elif "ContasPagarPagas" in config["relative_path"]:
-            data_inicial = datetime.strptime(
-                config["body"]["DUPEMISSAO1"], "%d/%m/%Y"
-            )
-        elif "ReceberRecebidas" in config["relative_path"]:
-            data_inicial = datetime.strptime(
-                config["body"]["DUPEMISSAO1"], "%d/%m/%Y"
-            )
+    if incremental_date == False:
+        try:
+            if "ProdutosPorOS" in config["relative_path"]:
+                data_inicial = datetime.strptime(
+                    config["body"]["DATAINICIAL"], "%d/%m/%Y"
+                )
+            elif "EntradasEstoque" in config["relative_path"]:
+                data_inicial = datetime.strptime(
+                    config["body"]["DATAINICIO"], "%d/%m/%Y"
+                )
+            elif "ContasPagarPagas" in config["relative_path"]:
+                data_inicial = datetime.strptime(
+                    config["body"]["DUPEMISSAO1"], "%d/%m/%Y"
+                )
+            elif "ReceberRecebidas" in config["relative_path"]:
+                data_inicial = datetime.strptime(
+                    config["body"]["DUPEMISSAO1"], "%d/%m/%Y"
+                )
 
-    except KeyError as e:
-        print(f"Chave não encontrada: {e}. Pulando para o próximo caso.")
-    except ValueError as e:
-        print(f"Erro ao converter data: {e}. Verifique o formato.")
+        except KeyError as e:
+            print(f"Chave não encontrada: {e}. Pulando para o próximo caso.")
+        except ValueError as e:
+            print(f"Erro ao converter data: {e}. Verifique o formato.")
 
-    return data_inicial
+        return data_inicial
+    
+    else:
+        try:
+            tables_initial_date = get_incremental_date()
+            for table, date in tables_initial_date:
+                table = formatar_nome_para_root(table)
+                if table in config["relative_path"]:
+                    data_inicial = date
+                
+        except KeyError as e:
+            print(f"Chave não encontrada: {e}. Pulando para o próximo caso.")
+        except ValueError as e:
+            print(f"Erro ao converter data: {e}. Verifique o formato.")
+
+        return data_inicial
+        
 
 # Download de dados das APIs
-def request_memory_saving():
+def request_total_memory_saving():
     file_name = file_requests_config
 
     if not file_name.exists():
@@ -242,7 +334,7 @@ def request_memory_saving():
             else:
                 print(f"O arquivo para: {config['relative_path']}, já existe na pasta de arquivos temporários.")
 
-def incremental_memory_saving():
+def request_incremental_memory_saving():
     file_name = file_requests_config
 
     if not file_name.exists():
@@ -252,11 +344,52 @@ def incremental_memory_saving():
     with open(file_name, "r") as file:
         requests_config = json.load(file)
 
+        print(f"{'-'*45}\nIniciando processo de download incremental...\n{'-'*45}\n")
+        time.sleep(2)
         for config in requests_config:
             temp_file = (
                 ROOT_PATH
                 / f"source/model/data/temp_file_data/{config['relative_path']}.json"
             )
             
+
             if not temp_file.exists():
-                pass
+                temp_file.parent.mkdir(parents=True, exist_ok=True)
+
+                with temp_file.open(mode="w", encoding="utf-8") as temp_file:
+                    temp_file.write("[\n")
+
+                    if any(item in config["relative_path"] for item in no_date_api_list):
+                        
+                        print(f"-Download total para: {config["relative_path"]}\n")
+                        time.sleep(1)
+                        full_requests(config=config, temp_file=temp_file)
+
+                        temp_file.write("\n]")
+
+                    else:
+                        print(f"-Fazendo consulta de data incremental para: {config["relative_path"]}")
+                        time.sleep(1)
+                        data_inicial = get_initial_date(config=config, incremental_date=True)
+
+                        if data_inicial is None:
+                            print(f"Não foi possível obter a data incremental para a tabela: {config['relative_path']}")
+                            temp_file.write("\n]")
+                            continue
+
+                        data_fim = data_final.strftime("%d/%m/%Y")
+                        
+                        print(f"-Iniciando download incremental para: {config["relative_path"]}")
+                        incremental_requests(
+                            config=config, 
+                            data_inicial=data_inicial, 
+                            data_final=data_fim,
+                            temp_file=temp_file,
+                            )
+
+                        temp_file.write("\n]")
+
+                        print(f"-Download incremental de: {config["relative_path"]}, finalizado!\n ")
+
+            else:
+                print(f"O arquivo para: {config['relative_path']}, já existe na pasta de arquivos temporários.")

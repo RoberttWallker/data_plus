@@ -46,19 +46,13 @@ def load_config_file(filename):
     except (FileNotFoundError, json.JSONDecodeError):
         return []
 
+def load_config_file_update(filename):
 
-def load_db_config(db_configs):
-    connections = []
-    for config in db_configs:
-        conn = ConfigDB(
-            config.host,
-            config.port,
-            config.user,
-            config.password,
-            config.dbname,
-        )
-        connections.append(conn)
-    return connections
+    try:
+        with open(filename, "r", encoding="utf-8") as file:
+            return json.load(file)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
 
 
 def get_connecion_data():
