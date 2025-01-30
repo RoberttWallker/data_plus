@@ -1,73 +1,103 @@
 from pathlib import Path
 import ijson
-import re
-import json
-from sqlalchemy import inspect, Table, Column, Text, text
+import traceback
 import time
+import re
+from datetime import datetime
+import json
+from sqlalchemy import Table, Column, Text, delete
+from sqlalchemy.sql import text
 
 
 from .db_connector import (
     mysql_connection,
     postgresql_connection,
     load_config_file,
-    load_db_config,
+    load_config_file_update
 )
-
+from .db_update import formatar_datas_incrementais
+from .aux_func_app import delete_temp_files, no_date_api_list
+from .aux_func_inserter import tabelas_e_colunas, tabelas_e_dados
 
 MODEL_PATH = Path(__file__).absolute().parent.parent
 CONFIG_PATH = MODEL_PATH / "config"
 TEMP_FILE_PATH = MODEL_PATH / "data/temp_file_data"
 
+def comparar_tabelas(conn):
+    connection = conn.connection
 
-def delete_temp_files():
-    for item in TEMP_FILE_PATH.glob("*"):
-        try:
-            if item.is_file():
-                item.unlink()
-            elif item.is_dir():
-                for sub_item in item.glob("*"):
-                    sub_item.unlink() if sub_item.is_file() else sub_item.rmdir()
-                item.rmdir()
-        except Exception as e:
-            print(f"Erro ao remover {item}: {e}")
+    tabelas_e_diferencas = []
 
-    print("Arquivos e pastas temporárias, removidos com sucesso.")
+    def datas_max_min(file, col_data):
+        max_date = None
+        min_date = None
+        with open(file, "r") as f:
+            dados_carregados = json.load(f)
+            file_flat = [item for sublist in dados_carregados for item in sublist]
+            if file_flat:
+                datas = [datetime.strptime(item[col_data], "%Y-%m-%d %H:%M:%S") for sublista in dados_carregados for item in sublista if col_data in item]  
+                try:
+                    max_date = max(datas).strftime("%Y-%m-%d %H:%M:%S")
+                    min_date = min(datas).strftime("%Y-%m-%d %H:%M:%S")
+                except:
+                    pass
+        return max_date, min_date
+    
+    def select_from_db(table_name, col_data, min_date, max_date):
+        table = []
 
+        query = text(f"SELECT * FROM {table_name} WHERE {col_data} BETWEEN :min_date AND :max_date")
+        result = connection.execute(query, {"min_date": min_date, "max_date": max_date})
+        colunas = result.keys()
+        valores = result.fetchall()
 
-def obter_colunas(arquivo):
-    with open(arquivo, "r", encoding="utf-8") as f:
-        try:
-            # Tenta acessar como uma lista de listas
-            parser = ijson.items(f, "item.item")
-            primeiro_dicionario = next(parser)
-        except StopIteration:
-            # Se falhar, volta ao início do arquivo e tenta como lista simples
-            f.seek(0)  # Reinicia a leitura do arquivo
-            parser = ijson.items(f, "item")
-            primeiro_dicionario = next(parser)
+        for linha in valores:
+            linha_dict = dict(zip(colunas, linha))
+            if col_data in linha_dict and isinstance(linha_dict[col_data], datetime):
+                linha_dict[col_data] = linha_dict[col_data].strftime("%Y-%m-%d %H:%M:%S")
 
-        return primeiro_dicionario
+            table.append(linha_dict)
+        
+        return table
+    
+    def comparar(table, file_content):
+        # Transforma file_content (lista de listas) em uma lista de dicionários
+        file_content_flat = [item for sublista in file_content for item in sublista]
+        # Encontra as diferenças
+        diff = []
+        for linha_content in file_content_flat:
+            if linha_content not in table:
+                diff.append(linha_content)
+        
+        return diff
+    
+    for file in TEMP_FILE_PATH.rglob("*.json"):
+        table_name = re.sub(r"([a-z])([A-Z])", r"\1_\2", file.name.split("Grid.")[0]).lower()
+        file_content = load_config_file_update(file)
+        
+        if file.name in ["ContasReceberRecebidasGrid.json", "ContasPagarPagasGrid.json"]:
+            col_data = "EMISSAO"
+        elif file.name == "EntradasEstoqueGrid.json":
+            col_data = "DATAENTRADA"
+        elif file.name == "ProdutosPorOSGrid.json":
+            col_data = "DATA"
+        else:
+            continue
 
+        max_date, min_date = datas_max_min(file=file, col_data=col_data)
+        table = select_from_db(table_name, col_data, min_date, max_date)
+        diferencas = comparar(table, file_content)
 
-def tabelas_e_colunas(path):
-    tabela_e_colunas = []
-    for file in path.rglob("*.json"):
-        file_name = file.name.split("Grid.")[0]
-        table_name = re.sub(r"([a-z])([A-Z])", r"\1_\2", file_name).lower()
-        colunas = obter_colunas(file)
-        tabela_e_colunas.append((table_name, colunas))
-    return tabela_e_colunas
+        tabelas_e_diferencas.append({"arquivo": file, "diferencas": diferencas})
 
+        # Exibe as diferenças
+        print(f"Foram encontradas {len(diferencas)} linhas de dados novos no o arquivo {file.name}.")
+        # for linha in diferencas:
+        #     print(json.dumps(linha[2:], indent=4))
 
-def tabelas_e_dados(path):
-    tabelas_e_dados = []
-    for file in path.rglob("*.json"):
-        file_name = file.name.split("Grid.")[0]
-        table_name = re.sub(r"([a-z])([A-Z])", r"\1_\2", file_name).lower()
-        tabelas_e_dados.append((table_name, file))
-    return tabelas_e_dados
-
-
+    return tabelas_e_diferencas
+            
+# Inserção de dados
 def insert_tables_metadata(conn):
     perfil_colunas = tabelas_e_colunas(TEMP_FILE_PATH)
 
@@ -81,8 +111,7 @@ def insert_tables_metadata(conn):
         table = Table(tabela, conn.metadata, *columns)
 
     conn.metadata.create_all(conn.engine)
-
-
+       
 def insert_data(conn):
     dados_completos = tabelas_e_dados(TEMP_FILE_PATH)
 
@@ -111,8 +140,9 @@ def insert_data(conn):
                             else:
                                 lote.append(item)
 
+                        print(f"Inserindo os dados na tabela: {tabela}")
+                        time.sleep(1)
                         if len(lote) >= lote_tam:
-                            print(f"Inserindo os dados na tabela: {tabela}")
                             try:
                                 connection.execute(table.insert(), lote)
                                 lote.clear()
@@ -137,7 +167,6 @@ def insert_data(conn):
         print(f"\n{'-'*37}{'-'*len(connection_name)}\nFechando conexão com banco de dados: {connection_name}\n{'-'*37}{'-'*len(connection_name)}\n")
         connection.close()
 
-
 def insert_manager(conn):
     try:
         try:
@@ -146,6 +175,7 @@ def insert_manager(conn):
             print(
                 f"Ocorreu um erro ao inserir as tabelas no metadata. Erro: {e}",
             )
+            traceback.print_exc()
 
         try:
             insert_data(conn)
@@ -153,12 +183,72 @@ def insert_manager(conn):
             print(
                 f"Ocorreu um erro ao inserir os dados no banco de dados. Erro: {e}",
             )
+            traceback.print_exc()
 
     except Exception as e:
         print(f"Ocorreu um erro: {e} na função insert_manager()")
 
+def insert_manager_incremental(conn):
+    try:
 
-def insert_into_db():
+        try:
+            formatar_datas_incrementais()
+        except Exception as e:
+            print(
+                f"Ocorreu um erro ao gravar um arquivo temporário: {e}",
+            )
+            traceback.print_exc()
+
+        try:
+            tabelas_e_diferencas = comparar_tabelas(conn)
+            for item in tabelas_e_diferencas:
+                tabela = item['arquivo']
+                diferencas = item['diferencas']
+                if len(diferencas) > 0:
+                    with open(tabela, "w", encoding="utf-8") as f:
+                        f.write(f"[\n")
+                        json.dump(diferencas, f, ensure_ascii=False)
+                        f.write(f"\n]")
+                else:
+                    if tabela.exists():
+                        tabela.unlink()
+
+        except Exception as e:
+            print(
+                f"Ocorreu um erro ao gravar um arquivo temporário: {e}",
+            )
+            traceback.print_exc()
+
+        try:
+            insert_tables_metadata(conn)
+        except Exception as e:
+            print(
+                f"Ocorreu um erro ao inserir as tabelas no metadata. Erro: {e}",
+            )
+            traceback.print_exc()
+        try:
+            tabelas_sem_data = [re.sub(r"([a-z])([A-Z])", r"\1_\2", tabela).lower() for tabela in no_date_api_list]
+            tabelas_no_metada = list(conn.metadata.tables.keys())
+            for tabela in tabelas_no_metada:
+                if tabela in tabelas_sem_data:
+                    #Limpar tabela totalmente
+                    stmt = delete(conn.metadata.tables[tabela])
+                    conn.connection.execute(stmt)
+                    conn.connection.commit()
+                    #Depois inserir os dados
+                    
+            insert_data(conn)
+        except Exception as e:
+            print(
+                f"Ocorreu um erro ao inserir os dados no banco de dados. Erro: {e}",
+            )
+            traceback.print_exc()
+
+    except Exception as e:
+        print(f"Ocorreu um erro: {e} na função insert_manager()")
+        traceback.print_exc()
+
+def insert_total_into_db():
     controle = {}
     for file in CONFIG_PATH.rglob("db_config/*.json"):
         db_configs = load_config_file(file)
@@ -208,6 +298,74 @@ def insert_into_db():
                 controle["Fora_padrao_ou_sgbd_nao_configurado"] = False
 
     if all(controle.values()):
-        delete_temp_files()
+        delete_temp_files(TEMP_FILE_PATH)
     else:
         print("Nem todas as inserções foram bem-sucedidas. Arquivos mantidos.")
+
+def insert_increment_into_db():
+    controle = {}
+    for file in CONFIG_PATH.rglob("db_config/*.json"):
+        db_configs = load_config_file(file)
+        for config in db_configs:
+
+            print("\nIniciando...")
+            if file.name == "db_config_mysql.json":
+                time.sleep(1)
+                print(f"\nEssas são as configuraçãoes do banco de dados:\n{config}\n")
+                time.sleep(1)
+                conn = mysql_connection(
+                    config["host"],
+                    config["port"],
+                    config["user"],
+                    config["password"],
+                    config["dbname"],
+                )
+
+                if conn == None:
+                    print("Conexão falhou. Não é possível retirar última data.")
+                    controle[config["dbname"]] = False
+                else:
+                    try:
+                        insert_manager_incremental(conn)
+                        controle[config["dbname"]] = True
+                    except Exception as e:
+                        print(f"Erro ao tentar inserir os dados no MySQL '{config['dbname']}': {e}")
+                        traceback.print_exc()
+                        controle[config["dbname"]] = False
+
+            elif file.name == "db_config_postgresql.json":
+                print(f"\nEssas são as configuraçãoes do db:\n{config}\n")
+                conn = postgresql_connection(
+                    config["host"],
+                    config["port"],
+                    config["user"],
+                    config["password"],
+                    config["dbname"],
+                )
+
+                if conn == None:
+                    print("Conexão falhou. Não é possível construir as tabelas.")
+                    controle[config["dbname"]] = False
+                else:
+                    try:
+                        insert_manager_incremental(conn)
+                        controle[config["dbname"]] = True
+                    except Exception as e:
+                        print(f"Erro ao tentar inserir os dados no PostgreSQL '{config['dbname']}': {e}")
+                        traceback.print_exc()
+                        controle[config["dbname"]] = False
+            else:
+                print(
+                    "Arquivo fora do padrão, ou SGBD ainda não configurado na ferramenta!"
+                )
+                controle["Fora_padrao_ou_sgbd_nao_configurado"] = False
+
+    if all(controle.values()):
+        delete_temp_files(TEMP_FILE_PATH)
+    else:
+        print("Nem todas as inserções foram bem-sucedidas. Arquivos mantidos.")
+
+
+
+
+

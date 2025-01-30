@@ -9,6 +9,7 @@ import psycopg2
 
 
 MODEL_PATH = Path(__file__).absolute().parent.parent
+DB_CONFIG_PATH = MODEL_PATH / "config/db_config/"
 
 
 # Funções de salvamento e carregamento de configurações de bancos de dados
@@ -19,6 +20,15 @@ def save_db_config(db_config, filename):
     try:
         with open(filename, "r") as file:
             db_configs = json.load(file)
+            for config in db_configs:
+                if (config["host"] == db_config["host"] and
+                    config["port"] == db_config["port"] and
+                    config["dbname"] == db_config["dbname"]
+                    ):
+                    print(
+                        f"\n{"-"*35}\nA configuração de banco de dados: {json.dumps(db_config, indent=4)}, já existe!\n{"-"*35}\n"
+                    )
+                    return
     except (FileNotFoundError, json.JSONDecodeError):
         db_configs = []
 
@@ -36,19 +46,13 @@ def load_config_file(filename):
     except (FileNotFoundError, json.JSONDecodeError):
         return []
 
+def load_config_file_update(filename):
 
-def load_db_config(db_configs):
-    connections = []
-    for config in db_configs:
-        conn = ConfigDB(
-            config.host,
-            config.port,
-            config.user,
-            config.password,
-            config.dbname,
-        )
-        connections.append(conn)
-    return connections
+    try:
+        with open(filename, "r", encoding="utf-8") as file:
+            return json.load(file)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
 
 
 def get_connecion_data():
@@ -192,6 +196,43 @@ def postgresql_configuration(
         print(f"Ocorreu o seguinte erro: {e}")
 
 
+def check_existing_db_config(config_db, sgbd_configuration, sgbd_configs_file):
+    if sgbd_configs_file.exists():
+        configs = load_config_file(sgbd_configs_file)
+        config_exists = any(
+            config['host'] == config_db.host and
+            config['port'] == config_db.port and
+            config['user'] == config_db.user and
+            config['password'] == config_db.password and
+            config['dbname'] == config_db.dbname 
+            for config in configs
+        )
+
+        if config_exists:
+            print(
+                f"A configuração para o banco {config_db.dbname} já existe."
+            )
+            return
+
+        else:
+            sgbd_configuration(
+                config_db.host,
+                config_db.port,
+                config_db.user,
+                config_db.password,
+                config_db.dbname,
+            )
+            return
+
+    sgbd_configuration(
+        config_db.host,
+        config_db.port,
+        config_db.user,
+        config_db.password,
+        config_db.dbname,
+    )
+    return
+
 # Métodos de conexão a bancos de dados
 
 
@@ -282,33 +323,25 @@ def create_connection_db():
 | Q - Sair                      |
 #################################
 >>>"""
-        )
+        ).upper()
         if escolha == "1":
             config_db = get_connecion_data()
 
-            mysql_configuration(
-                config_db.host,
-                config_db.port,
-                config_db.user,
-                config_db.password,
-                config_db.dbname,
-            )
-            break
+            mysql_configs_file = DB_CONFIG_PATH / "db_config_mysql.json"
+
+            check_existing_db_config(config_db, mysql_configuration, mysql_configs_file)
+            
+
         elif escolha == "2":
             config_db = get_connecion_data()
+            postgresql_configs_file = DB_CONFIG_PATH / "db_config_postgresql.json"
 
-            postgresql_configuration(
-                config_db.host,
-                config_db.port,
-                config_db.user,
-                config_db.password,
-                config_db.dbname,
-            )
-            break
+            check_existing_db_config(config_db, postgresql_configuration, postgresql_configs_file)
+
         elif escolha == "Q":
-            print("Encerrando o programa.")
+            print("Saindo das configurações de SGBD...\n")
             time.sleep(1)
-            exit()
+            break
         else:
             print("Opção inválida, tente novamente.")
             time.sleep(1)
