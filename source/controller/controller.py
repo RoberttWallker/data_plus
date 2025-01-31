@@ -29,10 +29,6 @@ def increment_data_resquests():
     request_incremental_memory_saving()
 
 def total_inserter():   
-<<<<<<< HEAD
-    insert_into_db()
-    
-=======
     insert_total_into_db()
 
 def increment_inserter():
@@ -46,4 +42,3 @@ def init_incremental_update():
     increment_inserter()
 
 
->>>>>>> develop
