@@ -7,6 +7,7 @@ from datetime import datetime
 import json
 from sqlalchemy import Table, Column, Text, delete
 from sqlalchemy.sql import text
+import logging
 
 
 from .db_connector import (
@@ -16,7 +17,7 @@ from .db_connector import (
     load_config_file_update
 )
 from .db_update import formatar_datas_incrementais
-from .aux_func_app import delete_temp_files, no_date_api_list
+from .aux_func_app import no_date_api_list, delete_temp_files, ghost_exec_creation
 from .aux_func_inserter import tabelas_e_colunas, tabelas_e_dados
 
 MODEL_PATH = Path(__file__).absolute().parent.parent
@@ -91,7 +92,10 @@ def comparar_tabelas(conn):
         tabelas_e_diferencas.append({"arquivo": file, "diferencas": diferencas})
 
         # Exibe as diferenças
-        print(f"Foram encontradas {len(diferencas)} linhas de dados novos no o arquivo {file.name}.")
+        msg_diff = f"Foram encontradas {len(diferencas)} linhas de dados novos no o arquivo {file.name}."
+        print(msg_diff)
+        logging.info(msg_diff)
+
         # for linha in diferencas:
         #     print(json.dumps(linha[2:], indent=4))
 
@@ -272,6 +276,7 @@ def insert_total_into_db():
                     controle[config["dbname"]] = False
                 else:
                     insert_manager(conn)
+
                     controle[conn.db_name] = True
 
             elif file.name == "db_config_postgresql.json":
@@ -296,6 +301,14 @@ def insert_total_into_db():
                     "Arquivo fora do padrão, ou SGBD ainda não configurado na ferramenta!"
                 )
                 controle["Fora_padrao_ou_sgbd_nao_configurado"] = False
+                
+    try:
+        ghost_exec_creation()
+    except Exception as e:
+            print(
+                f"Ocorreu um erro ao criar os arquivos .bat e .vbs de atualização incremental: {e}",
+            )
+            traceback.print_exc()
 
     if all(controle.values()):
         delete_temp_files(TEMP_FILE_PATH)
@@ -364,8 +377,3 @@ def insert_increment_into_db():
         delete_temp_files(TEMP_FILE_PATH)
     else:
         print("Nem todas as inserções foram bem-sucedidas. Arquivos mantidos.")
-
-
-
-
-
