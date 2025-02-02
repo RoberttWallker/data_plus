@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, date
+import inspect
 from pathlib import Path
 import requests
 import json
@@ -271,10 +272,15 @@ def get_initial_date(config, incremental_date=False):
     else:
         try:
             tables_initial_date = get_incremental_date()
-            for table, date in tables_initial_date:
-                table = formatar_nome_para_root(table)
-                if table in config["relative_path"]:
-                    data_inicial = date
+            if tables_initial_date is None:
+                pass
+            elif not tables_initial_date:
+                print(f"Nenhuma tabela com data inicial encontrada na função: > get_initial_date-tables_initial_date = get_incremental_date <")
+            else:
+                for table, date in tables_initial_date:
+                    table = formatar_nome_para_root(table)
+                    if table in config["relative_path"]:
+                        data_inicial = date
                 
         except KeyError as e:
             print(f"Chave não encontrada: {e}. Pulando para o próximo caso.")
