@@ -37,7 +37,6 @@ def save_db_config(db_config, filename):
     with open(filename, "w") as file:
         json.dump(db_configs, file, indent=4)
 
-
 def load_config_file(filename):
 
     try:
@@ -53,7 +52,6 @@ def load_config_file_update(filename):
             return json.load(file)
     except (FileNotFoundError, json.JSONDecodeError):
         return []
-
 
 def get_connecion_data():
     confirmado = False  # Variável de controle para encerrar o loop externo
@@ -100,7 +98,6 @@ def get_connecion_data():
     )
     return config_db
 
-
 def mysql_configuration(
     host,
     port,
@@ -143,6 +140,35 @@ def mysql_configuration(
     except Exception as e:
         print(f"Ocorreu o seguinte erro: {e}")
 
+def mysql_init_connection(
+    host,
+    port,
+    user,
+    password,
+    dbname,
+):
+    try:
+        # Codifica a senha para evitar caracteres especiais
+        encoded_password = quote(password, safe="")
+
+        engine = create_engine(
+            f"mysql+pymysql://{user}:{encoded_password}@{host}:{port}/"
+        )
+        connection = engine.connect()
+
+        with connection.begin():
+            connection.execute(text(f"CREATE DATABASE IF NOT EXISTS {dbname};"))
+
+    except OperationalError as e:
+        numero_erro = e.orig.args[0] # type: ignore
+        if numero_erro == 2003:
+            print(f"Erro! Endereço do Host ou porta de acesso não está correto.")
+            print(f"Erro completo: {e.orig.args}") # type: ignore
+        elif numero_erro == 1045:
+            print(f"Erro! Endereço usuário ou senha não está correto.")
+            print(f"Erro completo: {e.orig.args}") # type: ignore
+    except Exception as e:
+        print(f"Ocorreu o seguinte erro: {e}")
 
 def postgresql_configuration(
     host,
@@ -195,6 +221,44 @@ def postgresql_configuration(
     except Exception as e:
         print(f"Ocorreu o seguinte erro: {e}")
 
+def postgresql_init_connection(
+    host,
+    port,
+    user,
+    password,
+    dbname,
+):
+    try:
+        # Usar psycopg2 diretamente para conectar sem transações e criar o banco
+        conn = psycopg2.connect(
+            host=host,
+            port=port,
+            user=user,
+            password=password,
+            dbname="postgres",
+        )
+        conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+        cursor = conn.cursor()
+
+        # Verificar se o banco de dados já existe
+        cursor.execute(f"SELECT 1 FROM pg_database WHERE datname='{dbname}'")
+        exists = cursor.fetchone()
+
+        if not exists:
+            # Criar o banco de dados se ele não existir
+            cursor.execute(f"CREATE DATABASE {dbname};")
+
+        cursor.close()
+        conn.close()
+
+    except psycopg2.OperationalError as e:
+        print(f"Erro! Porta de acesso não está correta.\n")
+        print(f"Erro completo: {e}")
+    except UnicodeDecodeError as e:
+        print(f"Erro! Host, usuário ou senha de acesso não está correto.")
+        print(f"Erro completo: {e}")
+    except Exception as e:
+        print(f"Ocorreu o seguinte erro: {e}")
 
 def check_existing_db_config(config_db, sgbd_configuration, sgbd_configs_file):
     if sgbd_configs_file.exists():
@@ -232,6 +296,111 @@ def check_existing_db_config(config_db, sgbd_configuration, sgbd_configs_file):
         config_db.dbname,
     )
     return
+
+def choose_a_database():
+    print('Opções de SGBD(s) já configurados: ')
+    lista_name_sgbs = []
+    lista_path_config_sgbs = []
+    for file in DB_CONFIG_PATH.rglob("*.json"):
+        if file.name == "db_config_mysql.json":
+            name = 'MySQL'
+            lista_name_sgbs.append(name)
+            lista_path_config_sgbs.append(file)
+
+        elif file.name == "db_config_postgresql.json":
+            name = 'PostgreSQL'
+            lista_name_sgbs.append(name)
+            lista_path_config_sgbs.append(file)
+    
+    if not lista_name_sgbs:
+        print("Nenhum arquivo de configuração de SGBD encontrado.")
+        return
+
+    opcoes = '\n'.join([f"{idx + 1} - {sgbd}" for idx, sgbd in enumerate(lista_name_sgbs)])
+
+    while True:
+        escolha = input(f'''
+Em qual você deseja prosseguir?
+{opcoes}
+Q - Sair
+>>> ''')
+        if escolha.isdigit() and int(escolha) in range(1, len(lista_name_sgbs) + 1):
+            path_config = lista_path_config_sgbs[int(escolha) - 1]
+            print(f"Você escolheu {lista_name_sgbs[int(escolha) - 1]}")
+            db_configs = load_config_file(path_config)
+            opcoes_2 = '\n'.join([f"{idx + 1} - {config}" for idx, config in enumerate(db_configs)])
+        
+            while True:
+                escolha_2 = input(f'''
+Qual banco de dado você deseja acessar?:
+{opcoes_2}
+Q - Sair
+>>> ''')
+                if escolha_2.isdigit() and int(escolha_2) in range(1, len(lista_name_sgbs) + 1):
+                    config = db_configs[int(escolha_2) - 1]
+                    print(f"Você escolheu: {config}")
+                    if path_config.name == "db_config_mysql.json":
+                        mysql_init_connection(
+                            config['host'],
+                            config['port'],
+                            config['user'],
+                            config['password'],
+                            config['dbname']
+                        )
+
+                        try:
+                            conn = mysql_connection(
+                                config['host'],
+                                config['port'],
+                                config['user'],
+                                config['password'],
+                                config['dbname']
+                            )
+
+                            if conn:
+                                print("Conexão MySQL estabelecida com sucesso!")
+                                break
+                        except:
+                            print("Falha ao conectar ao MySQL. Verifique os detalhes de conexão.")
+                            break
+
+                    elif path_config.name == "db_config_postgresql.json":
+                        postgresql_init_connection(
+                            config['host'],
+                            config['port'],
+                            config['user'],
+                            config['password'],
+                            config['dbname']
+                        )
+
+                        try:
+                            conn = postgresql_connection(
+                                config['host'],
+                                config['port'],
+                                config['user'],
+                                config['password'],
+                                config['dbname']
+                            )
+
+                            if conn:
+                                print("Conexão MySQL estabelecida com sucesso!")
+                                break
+                        except:
+                            print("Falha ao conectar ao MySQL. Verifique os detalhes de conexão.")
+                            break
+                    else:
+                        print(f"Opção ainda não configurada.")
+                elif escolha_2.upper() == "Q":
+                    break
+                else:
+                    print("Opção inválida, tente novamente!")
+
+        elif escolha.upper() == "Q":
+            break
+        else:
+            print("Opção inválida, tente novamente!")
+        
+
 
 # Métodos de conexão a bancos de dados
 

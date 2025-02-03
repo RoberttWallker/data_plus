@@ -17,7 +17,7 @@ file_requests_config = (
 )
 
 data_final = datetime.today()
-dias_incremento = timedelta(days=120)
+dias_incremento = timedelta(days=90)
 
 # Configurações de APIs
 def save_requests_config(conexao_api, unidade_api):
@@ -142,6 +142,24 @@ def chunks_requests(config, data_inicial, data_final, dias_incremento, temp_file
     while data_inicial < data_final: # type: ignore
 
         data_final_periodo = min(data_inicial + dias_incremento, data_final)
+
+        data_inicial_interna = None
+        data_final_interna = None
+
+        if config['relative_path'] in ["APIRelatoriosCR/ContasReceberRecebidasGrid", "APIRelatoriosCR/ContasPagarPagasGrid"]:
+            data_inicial_interna  = "DUPEMISSAO1"
+            data_final_interna = "DUPEMISSAO2"
+        elif config['relative_path'] == "APIRelatoriosCR/EntradasEstoqueGrid":
+            data_inicial_interna  = "DATAINICIO"
+            data_final_interna = "DATAFINAL"
+        elif config['relative_path'] == "APIRelatoriosCR/ProdutosPorOSGrid":
+            data_inicial_interna  = "DATAINICIAL"
+            data_final_interna = "DATAFINAL"
+        else:
+            raise ValueError(f"Endpoint desconhecido: {config['relative_path']}")
+
+        config['body'][data_inicial_interna] = data_inicial.strftime("%Y-%m-%d")
+        config["body"][data_final_interna] = data_final_periodo.strftime("%Y-%m-%d")
 
         response = requests.post(
             f"{config['url_base']}{config['relative_path']}",

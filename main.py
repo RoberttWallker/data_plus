@@ -5,7 +5,9 @@ from source.controller.controller import (
     total_data_requests,
     total_inserter,
     create_column_incremental,
-    init_incremental_update
+    init_incremental_update,
+    create_scheduler_windows,
+    chooser_database
 )
 
 def main():
@@ -17,6 +19,8 @@ Escolha uma das opções abaixo:
 3 - Gravar configuração de nova API.
 4 - Criar colunas para atualização incremental no Power BI.
 5 - Fazer atualização incremental.
+6 - Criar tarefa de atualização incremental, no Agendador de
+    Tarefas do Windows.
 Q - Sair                                                                               
 >>> '''
 ).upper()
@@ -29,6 +33,7 @@ Q - Sair
                     break
                 elif resposta_2 == "n":
                     print('Nenhum banco de dados adicionado.\n')
+                    chooser_database()                    
                     time.sleep(1)
                     break
                 else:
@@ -67,6 +72,9 @@ Q - Sair
         
         elif resposta == "5":
             init_incremental_update()
+        
+        elif resposta == "6":
+            create_scheduler_windows()
 
         elif resposta == "Q":
             print("Encerrando...")
