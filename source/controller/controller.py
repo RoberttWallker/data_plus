@@ -7,7 +7,7 @@ sys.path.append(str(ROOT_PATH / "source"))
 import socket
 import os
 from model.modules.api_connector import request_config, request_total_memory_saving, request_incremental_memory_saving
-from model.modules.db_connector import create_connection_db, choose_a_database
+from model.modules.db_connector import create_connection_db, init_a_database
 from model.modules.db_inserter import insert_total_into_db, insert_increment_into_db
 from model.modules.db_update import manager_update_date
 from model.modules.aux_func_app import create_task_scheduler_windows
@@ -44,7 +44,7 @@ def init_incremental_update():
 def create_scheduler_windows():
     create_task_scheduler_windows()
 
-def chooser_database():
-    choose_a_database()
+def manager_init_database():
+    init_a_database()
 
-
+manager_init_database()

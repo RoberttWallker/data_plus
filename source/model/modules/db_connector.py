@@ -1,3 +1,4 @@
+import traceback
 from sqlalchemy import create_engine, MetaData, text
 from sqlalchemy.exc import OperationalError
 import time
@@ -297,11 +298,15 @@ def check_existing_db_config(config_db, sgbd_configuration, sgbd_configs_file):
     )
     return
 
-def choose_a_database():
+def init_a_database():
+    verify_db_configs = [file for file in DB_CONFIG_PATH.rglob("*.json")]
+    if not verify_db_configs:
+        return
+
     print('Opções de SGBD(s) já configurados: ')
     lista_name_sgbs = []
     lista_path_config_sgbs = []
-    for file in DB_CONFIG_PATH.rglob("*.json"):
+    for file in verify_db_configs:
         if file.name == "db_config_mysql.json":
             name = 'MySQL'
             lista_name_sgbs.append(name)
@@ -326,6 +331,7 @@ Q - Sair
 >>> ''')
         if escolha.isdigit() and int(escolha) in range(1, len(lista_name_sgbs) + 1):
             path_config = lista_path_config_sgbs[int(escolha) - 1]
+            time.sleep(1)
             print(f"Você escolheu {lista_name_sgbs[int(escolha) - 1]}")
             db_configs = load_config_file(path_config)
             opcoes_2 = '\n'.join([f"{idx + 1} - {config}" for idx, config in enumerate(db_configs)])
@@ -338,17 +344,13 @@ Q - Sair
 >>> ''')
                 if escolha_2.isdigit() and int(escolha_2) in range(1, len(lista_name_sgbs) + 1):
                     config = db_configs[int(escolha_2) - 1]
+                    time.sleep(1)
                     print(f"Você escolheu: {config}")
+                    time.sleep(1)
                     if path_config.name == "db_config_mysql.json":
-                        mysql_init_connection(
-                            config['host'],
-                            config['port'],
-                            config['user'],
-                            config['password'],
-                            config['dbname']
-                        )
 
                         try:
+                            
                             conn = mysql_connection(
                                 config['host'],
                                 config['port'],
@@ -357,23 +359,44 @@ Q - Sair
                                 config['dbname']
                             )
 
-                            if conn:
-                                print("Conexão MySQL estabelecida com sucesso!")
+                            if conn and conn.connection:
+                                print("Esse banco de dados já foi iniciado.")
                                 break
-                        except:
-                            print("Falha ao conectar ao MySQL. Verifique os detalhes de conexão.")
+                            else:
+                                mysql_init_connection(
+                                    config['host'],
+                                    config['port'],
+                                    config['user'],
+                                    config['password'],
+                                    config['dbname']
+                                )
+
+                                try:
+                                    conn = mysql_connection(
+                                        config['host'],
+                                        config['port'],
+                                        config['user'],
+                                        config['password'],
+                                        config['dbname']
+                                    )
+
+                                    if conn and conn.connection:
+                                        print("Conexão MySQL estabelecida com sucesso!")
+                                        break
+                                except Exception as e:
+                                    print(f"Banco de dados iniciado, mas a tentativa de conexão de teste falhou: {e}")
+                                    traceback.print_exc()
+                                    break
+
+                        except Exception as e:
+                            print("Todas as tentativa de conectar ao MySQL falharam. Verifique os detalhes de conexão.")
+                            traceback.print_exc()
                             break
 
                     elif path_config.name == "db_config_postgresql.json":
-                        postgresql_init_connection(
-                            config['host'],
-                            config['port'],
-                            config['user'],
-                            config['password'],
-                            config['dbname']
-                        )
 
                         try:
+
                             conn = postgresql_connection(
                                 config['host'],
                                 config['port'],
@@ -382,11 +405,38 @@ Q - Sair
                                 config['dbname']
                             )
 
-                            if conn:
-                                print("Conexão MySQL estabelecida com sucesso!")
+                            if conn and conn.connection:
+                                print("Esse banco de dados já foi iniciado.")
                                 break
-                        except:
-                            print("Falha ao conectar ao MySQL. Verifique os detalhes de conexão.")
+                            else:
+                                postgresql_init_connection(
+                                    config['host'],
+                                    config['port'],
+                                    config['user'],
+                                    config['password'],
+                                    config['dbname']
+                                )
+
+                                try:
+                                    conn = postgresql_connection(
+                                        config['host'],
+                                        config['port'],
+                                        config['user'],
+                                        config['password'],
+                                        config['dbname']
+                                    )
+
+                                    if conn and conn.connection:
+                                        print("Conexão PostgreSQL estabelecida com sucesso!")
+                                        break
+                                except Exception as e:
+                                    print(f"Banco de dados iniciado, mas a tentativa de conexão de teste falhou: {e}")
+                                    traceback.print_exc()
+                                    break
+
+                        except Exception as e:
+                            print("Todas as tentativa de conectar ao PostgreSQL falharam. Verifique os detalhes de conexão.")
+                            traceback.print_exc()
                             break
                     else:
                         print(f"Opção ainda não configurada.")
@@ -476,7 +526,39 @@ def postgresql_connection(host, port, user, password, dbname):
         print(f"Ocorreu o seguinte erro: {e}")
         return None
 
+def verify_connection(sgbd, config):
+    if sgbd == "MySQL":
+        conn = mysql_connection(
+            config['host'],
+            config['port'],
+            config['user'],
+            config['password'],
+            config['dbname']
+        )
 
+        if conn and conn.connection:
+            print("Esse banco de dados já foi iniciado.")
+            return True  # Banco existente
+        
+        print("Esse banco de dados não foi iniciado.")
+        return False  # Banco não existe ou erro de conexão
+    
+    if sgbd == "PostgreSQL":
+        conn = postgresql_connection(
+            config['host'],
+            config['port'],
+            config['user'],
+            config['password'],
+            config['dbname']
+        )
+
+        if conn and conn.connection:
+            print("Esse banco de dados já foi iniciado.")
+            return True  # Banco existente
+        
+        print("Esse banco de dados não foi iniciado.")
+        return False  # Banco não existe ou erro de conexão
+    
 # Métodos de criação de banco de dados
 def create_connection_db():
 

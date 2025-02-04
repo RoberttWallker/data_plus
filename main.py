@@ -7,7 +7,7 @@ from source.controller.controller import (
     create_column_incremental,
     init_incremental_update,
     create_scheduler_windows,
-    chooser_database
+    manager_init_database
 )
 
 def main():
@@ -33,7 +33,7 @@ Q - Sair
                     break
                 elif resposta_2 == "n":
                     print('Nenhum banco de dados adicionado.\n')
-                    chooser_database()                    
+                    manager_init_database()                    
                     time.sleep(1)
                     break
                 else:
