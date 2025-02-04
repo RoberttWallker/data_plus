@@ -1,4 +1,6 @@
 from pathlib import Path
+import subprocess
+import time
 
 SRC_PATH = Path(__file__).resolve().parent.parent.parent
 ROOT_PATH = Path(__file__).cwd()
@@ -72,3 +74,52 @@ WshShell.Run """{str(bat_file)}""", 0, False
         vbs_file_name.write(vbs_content)
     print(f"Arquivo VBS criado em: {vbs_file}\n")
 
+def create_task_scheduler_windows():
+
+    vbs_file_ghost_exec = SRC_PATH / "controller" / "tasks" / "ghost_exec_task.vbs"
+    bat_file_temp = SRC_PATH / "controller" / "tasks" / "bat_file_temp.bat"
+
+    bat_content = f"""
+@echo off
+setlocal
+
+:: Definição de variáveis
+set "TASK_NAME=GhostExecIncrementalSavWin"
+set "VBS_PATH={vbs_file_ghost_exec}"
+
+:: Criar a tarefa agendada
+schtasks /create /tn "%TASK_NAME%" /tr "wscript.exe \"%VBS_PATH%\"" /sc HOURLY /F /RL HIGHEST /RU SYSTEM
+
+:: Verificar se a tarefa foi criada com sucesso
+if %errorlevel%==0 (
+    echo Tarefa criada com sucesso!
+) else (
+    echo Falha ao criar a tarefa.
+)
+
+pause
+exit
+"""
+    with open(bat_file_temp, "w") as bat_file_name:
+        bat_file_name.write(bat_content)
+    print(f"Arquivo BAT criado em: {bat_file_temp}")
+
+    if not bat_file_temp.exists():
+        print(f"Arquivo {bat_file_temp} não encontrado!")
+        return
+    
+    try:
+        # Executar o .bat como administrador usando PowerShell
+        subprocess.run([
+            "powershell",
+            "-Command",
+            f"Start-Process cmd.exe -ArgumentList '/c \"{bat_file_temp}\"' -Verb RunAs"
+        ], check=True)
+        
+        print(f"{bat_file_temp} executado com sucesso!")
+
+        time.sleep(1)
+        bat_file_temp.unlink()
+
+    except subprocess.CalledProcessError as e:
+        print(f"Ocorreu um erro ao executar o script: {e}")
