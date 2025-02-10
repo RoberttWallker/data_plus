@@ -133,33 +133,49 @@ def chunks_requests(config, data_inicial, data_final, dias_incremento, temp_file
     
     total_iteracoes = 0
 
+    api_data_fields =  {
+        "data_inicio": {
+            "APIRelatoriosCR/ContasReceberRecebidasGrid": "DUPEMISSAO1",
+            "APIRelatoriosCR/ContasPagarPagasGrid": "DUPEMISSAO1",
+            "APIRelatoriosCR/EntradasEstoqueGrid": "DATAINICIO",
+            "APIRelatoriosCR/ProdutosPorOSGrid": "DATAINICIAL"
+        },
+        "data_fim": {
+            "APIRelatoriosCR/ContasReceberRecebidasGrid": "DUPEMISSAO2",
+            "APIRelatoriosCR/ContasPagarPagasGrid": "DUPEMISSAO2",
+            "APIRelatoriosCR/EntradasEstoqueGrid": "DATAFINAL",
+            "APIRelatoriosCR/ProdutosPorOSGrid": "DATAFINAL"
+        }
+    }
+
     headers = {
         "Identificador": config["identificador"],
         "Authorization": config["authorization"],
         "Content-Type": "application/json",
     }
 
+    if data_final is None and config['relative_path'] in api_data_fields['data_fim']:
+        campo_data = api_data_fields['data_fim'][config['relative_path']]
+        if campo_data in config['body']:
+            data_final = datetime.strptime(config['body'][campo_data], "%d/%m/%Y")
+        else:
+            print(f"Erro: Campo '{campo_data}' não encontrado no corpo da requisição.")
+
     while data_inicial < data_final: # type: ignore
 
         data_final_periodo = min(data_inicial + dias_incremento, data_final)
 
-        data_inicial_interna = None
-        data_final_interna = None
+        data_inicial_interna_update = None
+        data_final_interna_update = None
 
-        if config['relative_path'] in ["APIRelatoriosCR/ContasReceberRecebidasGrid", "APIRelatoriosCR/ContasPagarPagasGrid"]:
-            data_inicial_interna  = "DUPEMISSAO1"
-            data_final_interna = "DUPEMISSAO2"
-        elif config['relative_path'] == "APIRelatoriosCR/EntradasEstoqueGrid":
-            data_inicial_interna  = "DATAINICIO"
-            data_final_interna = "DATAFINAL"
-        elif config['relative_path'] == "APIRelatoriosCR/ProdutosPorOSGrid":
-            data_inicial_interna  = "DATAINICIAL"
-            data_final_interna = "DATAFINAL"
+        if config['relative_path'] in api_data_fields['data_inicio']:
+            data_inicial_interna_update  = api_data_fields['data_inicio'][config['relative_path']]
+            data_final_interna_update = api_data_fields['data_fim'][config['relative_path']]
         else:
             raise ValueError(f"Endpoint desconhecido: {config['relative_path']}")
 
-        config['body'][data_inicial_interna] = data_inicial.strftime("%Y-%m-%d")
-        config["body"][data_final_interna] = data_final_periodo.strftime("%Y-%m-%d")
+        config['body'][data_inicial_interna_update] = data_inicial.strftime("%d/%m/%Y")
+        config["body"][data_final_interna_update] = data_final_periodo.strftime("%d/%m/%Y")
 
         response = requests.post(
             f"{config['url_base']}{config['relative_path']}",
@@ -349,7 +365,7 @@ def request_total_memory_saving():
                         chunks_requests(
                             config=config, 
                             data_inicial=data_inicial, 
-                            data_final=data_final, 
+                            data_final=None, 
                             dias_incremento=dias_incremento, 
                             temp_file=temp_file,
                             )

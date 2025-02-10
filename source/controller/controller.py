@@ -46,5 +46,3 @@ def create_scheduler_windows():
 
 def manager_init_database():
     init_a_database()
-
-manager_init_database()
