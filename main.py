@@ -56,10 +56,11 @@ Q - Sair
 
             print("Iniciando download de arquivos...\n")
             time.sleep(1)
-            total_data_requests()
+            #Fazendo download de dados e capturando o identificador do cliente.
+            identificador = total_data_requests()
 
             time.sleep(1)
-            total_inserter()
+            total_inserter(identificador)
         
         elif resposta == "2":
             init_creation_db()

@@ -24,7 +24,7 @@ MODEL_PATH = Path(__file__).absolute().parent.parent
 CONFIG_PATH = MODEL_PATH / "config"
 TEMP_FILE_PATH = MODEL_PATH / "data/temp_file_data"
 
-def comparar_tabelas(conn):
+def comparar_tabelas(conn, identificador):
     connection = conn.connection
 
     tabelas_e_diferencas = []
@@ -73,14 +73,14 @@ def comparar_tabelas(conn):
         return diff
     
     for file in TEMP_FILE_PATH.rglob("*.json"):
-        table_name = re.sub(r"([a-z])([A-Z])", r"\1_\2", file.name.split("Grid.")[0]).lower()
+        table_name = re.sub(r"([a-z])([A-Z])", r"\1_\2", file.name.split("Grid")[0]).lower()
         file_content = load_config_file_update(file)
         
-        if file.name in ["ContasReceberRecebidasGrid.json", "ContasPagarPagasGrid.json"]:
+        if file.name in [f"ContasReceberRecebidasGrid_{identificador}.json", f"ContasPagarPagasGrid_{identificador}.json"]:
             col_data = "EMISSAO"
-        elif file.name == "EntradasEstoqueGrid.json":
+        elif file.name == f"EntradasEstoqueGrid_{identificador}json":
             col_data = "DATAENTRADA"
-        elif file.name == "ProdutosPorOSGrid.json":
+        elif file.name == f"ProdutosPorOSGrid_{identificador}.json":
             col_data = "DATA"
         else:
             continue
@@ -115,7 +115,7 @@ def insert_tables_metadata(conn):
         table = Table(tabela, conn.metadata, *columns)
 
     conn.metadata.create_all(conn.engine)
-       
+
 def insert_data(conn):
     dados_completos = tabelas_e_dados(TEMP_FILE_PATH)
 
@@ -192,115 +192,121 @@ def insert_manager(conn):
     except Exception as e:
         print(f"Ocorreu um erro: {e} na função insert_manager()")
 
-def insert_manager_incremental(conn):
-    try:
-
+def insert_manager_incremental(conn, identificador):
+    if identificador in conn.db_name.split("_"):
         try:
-            formatar_datas_incrementais()
+
+            try:
+                formatar_datas_incrementais(identificador)
+            except Exception as e:
+                print(
+                    f"Ocorreu um erro ao gravar um arquivo temporário: {e}",
+                )
+                traceback.print_exc()
+
+            try:
+                tabelas_e_diferencas = comparar_tabelas(conn, identificador)
+                for item in tabelas_e_diferencas:
+                    tabela = item['arquivo']
+                    diferencas = item['diferencas']
+                    if len(diferencas) > 0:
+                        with open(tabela, "w", encoding="utf-8") as f:
+                            f.write(f"[\n")
+                            json.dump(diferencas, f, ensure_ascii=False)
+                            f.write(f"\n]")
+                    else:
+                        if tabela.exists():
+                            tabela.unlink()
+
+            except Exception as e:
+                print(
+                    f"Ocorreu um erro ao gravar um arquivo temporário: {e}",
+                )
+                traceback.print_exc()
+
+            try:
+                insert_tables_metadata(conn)
+            except Exception as e:
+                print(
+                    f"Ocorreu um erro ao inserir as tabelas no metadata. Erro: {e}",
+                )
+                traceback.print_exc()
+            try:
+                tabelas_sem_data = [re.sub(r"([a-z])([A-Z])", r"\1_\2", tabela).lower() for tabela in no_date_api_list]
+                tabelas_no_metada = list(conn.metadata.tables.keys())
+                for tabela in tabelas_no_metada:
+                    if tabela in tabelas_sem_data:
+                        #Limpar tabela totalmente
+                        stmt = delete(conn.metadata.tables[tabela])
+                        conn.connection.execute(stmt)
+                        conn.connection.commit()
+                        #Depois inserir os dados
+                        
+                insert_data(conn)
+            except Exception as e:
+                print(
+                    f"Ocorreu um erro ao inserir os dados no banco de dados. Erro: {e}",
+                )
+                traceback.print_exc()
+
         except Exception as e:
-            print(
-                f"Ocorreu um erro ao gravar um arquivo temporário: {e}",
-            )
+            print(f"Ocorreu um erro: {e} na função insert_manager()")
             traceback.print_exc()
 
-        try:
-            tabelas_e_diferencas = comparar_tabelas(conn)
-            for item in tabelas_e_diferencas:
-                tabela = item['arquivo']
-                diferencas = item['diferencas']
-                if len(diferencas) > 0:
-                    with open(tabela, "w", encoding="utf-8") as f:
-                        f.write(f"[\n")
-                        json.dump(diferencas, f, ensure_ascii=False)
-                        f.write(f"\n]")
-                else:
-                    if tabela.exists():
-                        tabela.unlink()
-
-        except Exception as e:
-            print(
-                f"Ocorreu um erro ao gravar um arquivo temporário: {e}",
-            )
-            traceback.print_exc()
-
-        try:
-            insert_tables_metadata(conn)
-        except Exception as e:
-            print(
-                f"Ocorreu um erro ao inserir as tabelas no metadata. Erro: {e}",
-            )
-            traceback.print_exc()
-        try:
-            tabelas_sem_data = [re.sub(r"([a-z])([A-Z])", r"\1_\2", tabela).lower() for tabela in no_date_api_list]
-            tabelas_no_metada = list(conn.metadata.tables.keys())
-            for tabela in tabelas_no_metada:
-                if tabela in tabelas_sem_data:
-                    #Limpar tabela totalmente
-                    stmt = delete(conn.metadata.tables[tabela])
-                    conn.connection.execute(stmt)
-                    conn.connection.commit()
-                    #Depois inserir os dados
-                    
-            insert_data(conn)
-        except Exception as e:
-            print(
-                f"Ocorreu um erro ao inserir os dados no banco de dados. Erro: {e}",
-            )
-            traceback.print_exc()
-
-    except Exception as e:
-        print(f"Ocorreu um erro: {e} na função insert_manager()")
-        traceback.print_exc()
-
-def insert_total_into_db():
+def insert_total_into_db(identificador):
     controle = {}
     for file in CONFIG_PATH.rglob("db_config/*.json"):
         db_configs = load_config_file(file)
         for config in db_configs:
+            for key, value in config.items():
+                if key == 'dbname':
+                    #print(f"Verificando se '{identificador}' está em '{value}'") #Depuração
+                    if identificador in value.split("_"):
+                        print("\nIniciando...")
+                        if file.name == "db_config_mysql.json":
+                            time.sleep(1)
+                            print(f"\nEssas são as configuraçãoes do banco de dados:\n{config}\n")
+                            time.sleep(1)
+                            conn = mysql_connection(
+                                config["host"],
+                                config["port"],
+                                config["user"],
+                                config["password"],
+                                config["dbname"],
+                            )
 
-            print("\nIniciando...")
-            if file.name == "db_config_mysql.json":
-                time.sleep(1)
-                print(f"\nEssas são as configuraçãoes do banco de dados:\n{config}\n")
-                time.sleep(1)
-                conn = mysql_connection(
-                    config["host"],
-                    config["port"],
-                    config["user"],
-                    config["password"],
-                    config["dbname"],
-                )
+                            if conn == None:
+                                print("Conexão falhou. Não é possível construir as tabelas.")
+                                controle[config["dbname"]] = False
+                            else:
+                                insert_manager(conn)
 
-                if conn == None:
-                    print("Conexão falhou. Não é possível construir as tabelas.")
-                    controle[config["dbname"]] = False
-                else:
-                    insert_manager(conn)
+                                controle[conn.db_name] = True
 
-                    controle[conn.db_name] = True
+                        elif file.name == "db_config_postgresql.json":
+                            print(f"\nEssas são as configuraçãoes do db:\n{config}\n")
+                            conn = postgresql_connection(
+                                config["host"],
+                                config["port"],
+                                config["user"],
+                                config["password"],
+                                config["dbname"],
+                            )
 
-            elif file.name == "db_config_postgresql.json":
-                print(f"\nEssas são as configuraçãoes do db:\n{config}\n")
-                conn = postgresql_connection(
-                    config["host"],
-                    config["port"],
-                    config["user"],
-                    config["password"],
-                    config["dbname"],
-                )
+                            if conn == None:
+                                print("Conexão falhou. Não é possível construir as tabelas.")
+                                controle[config["dbname"]] = False
+                            else:
+                                insert_manager(conn)
+                                controle[conn.db_name] = True
 
-                if conn == None:
-                    print("Conexão falhou. Não é possível construir as tabelas.")
-                    controle[config["dbname"]] = False
-                else:
-                    insert_manager(conn)
-                    controle[conn.db_name] = True
-
-            else:
-                print(
-                    "Arquivo fora do padrão, ou SGBD ainda não configurado na ferramenta!"
-                )
-                controle["Fora_padrao_ou_sgbd_nao_configurado"] = False
+                        else:
+                            print(
+                                "Arquivo fora do padrão, ou SGBD ainda não configurado na ferramenta!"
+                            )
+                            controle["Fora_padrao_ou_sgbd_nao_configurado"] = False
+                    else:
+                        pass
                 
     try:
         ghost_exec_creation()
@@ -315,63 +321,63 @@ def insert_total_into_db():
     else:
         print("Nem todas as inserções foram bem-sucedidas. Arquivos mantidos.")
 
-def insert_increment_into_db():
+def insert_increment_into_db(identificador):
     controle = {}
     for file in CONFIG_PATH.rglob("db_config/*.json"):
         db_configs = load_config_file(file)
         for config in db_configs:
+            if identificador in config["dbname"].split("_"):
+                print("\nIniciando...")
+                if file.name == "db_config_mysql.json":
+                    time.sleep(1)
+                    print(f"\nEssas são as configuraçãoes do banco de dados:\n{config}\n")
+                    time.sleep(1)
+                    conn = mysql_connection(
+                        config["host"],
+                        config["port"],
+                        config["user"],
+                        config["password"],
+                        config["dbname"],
+                    )
 
-            print("\nIniciando...")
-            if file.name == "db_config_mysql.json":
-                time.sleep(1)
-                print(f"\nEssas são as configuraçãoes do banco de dados:\n{config}\n")
-                time.sleep(1)
-                conn = mysql_connection(
-                    config["host"],
-                    config["port"],
-                    config["user"],
-                    config["password"],
-                    config["dbname"],
-                )
-
-                if conn == None:
-                    print("Conexão falhou. Não é possível retirar última data.")
-                    controle[config["dbname"]] = False
-                else:
-                    try:
-                        insert_manager_incremental(conn)
-                        controle[config["dbname"]] = True
-                    except Exception as e:
-                        print(f"Erro ao tentar inserir os dados no MySQL '{config['dbname']}': {e}")
-                        traceback.print_exc()
+                    if conn == None:
+                        print("Conexão falhou. Não é possível retirar última data.")
                         controle[config["dbname"]] = False
+                    else:
+                        try:
+                            insert_manager_incremental(conn, identificador)
+                            controle[config["dbname"]] = True
+                        except Exception as e:
+                            print(f"Erro ao tentar inserir os dados no MySQL '{config['dbname']}': {e}")
+                            traceback.print_exc()
+                            controle[config["dbname"]] = False
 
-            elif file.name == "db_config_postgresql.json":
-                print(f"\nEssas são as configuraçãoes do db:\n{config}\n")
-                conn = postgresql_connection(
-                    config["host"],
-                    config["port"],
-                    config["user"],
-                    config["password"],
-                    config["dbname"],
-                )
+                elif file.name == "db_config_postgresql.json":
+                    print(f"\nEssas são as configuraçãoes do db:\n{config}\n")
+                    conn = postgresql_connection(
+                        config["host"],
+                        config["port"],
+                        config["user"],
+                        config["password"],
+                        config["dbname"],
+                    )
 
-                if conn == None:
-                    print("Conexão falhou. Não é possível construir as tabelas.")
-                    controle[config["dbname"]] = False
-                else:
-                    try:
-                        insert_manager_incremental(conn)
-                        controle[config["dbname"]] = True
-                    except Exception as e:
-                        print(f"Erro ao tentar inserir os dados no PostgreSQL '{config['dbname']}': {e}")
-                        traceback.print_exc()
+                    if conn == None:
+                        print("Conexão falhou. Não é possível construir as tabelas.")
                         controle[config["dbname"]] = False
-            else:
-                print(
-                    "Arquivo fora do padrão, ou SGBD ainda não configurado na ferramenta!"
-                )
-                controle["Fora_padrao_ou_sgbd_nao_configurado"] = False
+                    else:
+                        try:
+                            insert_manager_incremental(conn)
+                            controle[config["dbname"]] = True
+                        except Exception as e:
+                            print(f"Erro ao tentar inserir os dados no PostgreSQL '{config['dbname']}': {e}")
+                            traceback.print_exc()
+                            controle[config["dbname"]] = False
+                else:
+                    print(
+                        "Arquivo fora do padrão, ou SGBD ainda não configurado na ferramenta!"
+                    )
+                    controle["Fora_padrao_ou_sgbd_nao_configurado"] = False
 
     if all(controle.values()):
         delete_temp_files(TEMP_FILE_PATH)

@@ -24,12 +24,11 @@ def obter_colunas(arquivo):
 
         return primeiro_dicionario
 
-
 def tabelas_e_colunas(path):
     tabela_e_colunas = []
     for file in path.rglob("*.json"):
         try:
-            file_name = file.name.split("Grid.")[0]
+            file_name = file.name.split("Grid")[0]
             table_name = re.sub(r"([a-z])([A-Z])", r"\1_\2", file_name).lower()
             colunas = obter_colunas(file)
 
@@ -45,11 +44,10 @@ def tabelas_e_colunas(path):
 
     return tabela_e_colunas
 
-
 def tabelas_e_dados(path):
     tabelas_e_dados = []
     for file in path.rglob("*.json"):
-        file_name = file.name.split("Grid.")[0]
+        file_name = file.name.split("Grid")[0]
         table_name = re.sub(r"([a-z])([A-Z])", r"\1_\2", file_name).lower()
         tabelas_e_dados.append((table_name, file))
     return tabelas_e_dados

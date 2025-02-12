@@ -123,3 +123,12 @@ exit
 
     except subprocess.CalledProcessError as e:
         print(f"Ocorreu um erro ao executar o script: {e}")
+
+def get_identifiers(file):
+    identifiers = []
+    
+    for item in file:
+        if isinstance(item, dict):
+            identifiers.extend(item.keys())
+    
+    return identifiers

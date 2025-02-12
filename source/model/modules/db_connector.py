@@ -342,7 +342,7 @@ Qual banco de dado você deseja acessar?:
 {opcoes_2}
 Q - Sair
 >>> ''')
-                if escolha_2.isdigit() and int(escolha_2) in range(1, len(lista_name_sgbs) + 1):
+                if escolha_2.isdigit() and int(escolha_2) in range(1, len(db_configs) + 1):
                     config = db_configs[int(escolha_2) - 1]
                     time.sleep(1)
                     print(f"Você escolheu: {config}")
@@ -450,11 +450,7 @@ Q - Sair
         else:
             print("Opção inválida, tente novamente!")
         
-
-
 # Métodos de conexão a bancos de dados
-
-
 def mysql_connection(host, port, user, password, dbname):
     # Codifica a senha para evitar caracteres especiais
     encoded_password = quote(password, safe="")
@@ -490,7 +486,6 @@ def mysql_connection(host, port, user, password, dbname):
     except Exception as e:
         print(f"Ocorreu o seguinte erro: {e}")
         return None
-
 
 def postgresql_connection(host, port, user, password, dbname):
     try:

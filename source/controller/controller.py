@@ -1,3 +1,4 @@
+import json
 import sys
 from pathlib import Path
 
@@ -6,11 +7,11 @@ sys.path.append(str(ROOT_PATH / "source"))
 
 import socket
 import os
-from model.modules.api_connector import request_config, request_total_memory_saving, request_incremental_memory_saving
+from model.modules.api_connector import request_config, request_total_memory_saving, request_incremental_memory_saving, file_requests_config
 from model.modules.db_connector import create_connection_db, init_a_database
 from model.modules.db_inserter import insert_total_into_db, insert_increment_into_db
 from model.modules.db_update import manager_update_date
-from model.modules.aux_func_app import create_task_scheduler_windows
+from model.modules.aux_func_app import create_task_scheduler_windows, get_identifiers
 
 
 local_host_name = socket.gethostname()
@@ -23,23 +24,28 @@ def init_creation_requests():
     request_config()
 
 def total_data_requests():
-    request_total_memory_saving()
+    identificador = request_total_memory_saving()
+    return identificador
 
-def increment_data_resquests():
-    request_incremental_memory_saving()
+def increment_data_resquests(identificador):
+    request_incremental_memory_saving(identificador)
 
-def total_inserter():   
-    insert_total_into_db()
+def total_inserter(identificador):   
+    insert_total_into_db(identificador)
 
-def increment_inserter():
-    insert_increment_into_db()
+def increment_inserter(identificador):
+    insert_increment_into_db(identificador)
 
 def create_column_incremental():
     manager_update_date()
 
 def init_incremental_update():
-    increment_data_resquests()
-    increment_inserter()
+    with open(file_requests_config, "r") as file:
+        requests_config = json.load(file)
+        identifiers = get_identifiers(requests_config)
+        for identifier in identifiers:
+            increment_data_resquests(identifier)
+            increment_inserter(identifier)
 
 def create_scheduler_windows():
     create_task_scheduler_windows()

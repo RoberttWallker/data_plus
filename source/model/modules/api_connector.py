@@ -9,50 +9,72 @@ import traceback
 
 from model.modules.classes import ConexaoAPI, UnidadeAPI
 from model.modules.db_update import get_incremental_date
-from model.modules.aux_func_app import formatar_nome_para_root, no_date_api_list
+from model.modules.aux_func_app import get_identifiers, formatar_nome_para_root, no_date_api_list
 
 ROOT_PATH = Path.cwd()
-file_requests_config = (
-    ROOT_PATH / "source/model/config/requests_config/requests_config.json"
-)
+file_requests_config = ROOT_PATH / "source/model/config/requests_config/requests_config.json"
 
 data_final = datetime.today()
 dias_incremento = timedelta(days=90)
 
 # Configurações de APIs
 def save_requests_config(conexao_api, unidade_api):
-    file_name = file_requests_config
+    file_path = file_requests_config
 
-    file_name.parent.mkdir(parents=True, exist_ok=True)
-
-    request_config = {
-        "url_base": conexao_api.url_base,
-        "identificador": conexao_api.identificador,
-        "authorization": conexao_api.authorization,
-        "relative_path": unidade_api.relative_path,
-        "body": unidade_api.body,
-    }
+    file_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:
-        with open(file_name, "r") as file:
-            requests_config = json.load(file)
-            for config in requests_config:
-                if (
-                    config["identificador"] == request_config["identificador"]
-                    and config["relative_path"] == request_config["relative_path"]
-                ):
-                    print(
-                        f'A Request: {request_config['relative_path']} com o identificador: {request_config["identificador"]} já existe!'
-                    )
-                    return
+        with open(file_path, "r") as file:
+            loaded_requests_config = json.load(file)
+            # for config in loaded_requests_config:
+                # if (
+                #     config["identificador"] == request_config["identificador"]
+                #     and config["relative_path"] == request_config["relative_path"]
+                # ):
+                #     print(
+                #         f'A Request: {request_config['relative_path']} com o identificador: {request_config["identificador"]} já existe!'
+                #     )
+                #     return
+            identifcador_existente = False
+            for config in loaded_requests_config:
+                if conexao_api.identificador in config:
+                    identifcador_existente = True
+                    for item in config[conexao_api.identificador]:
+                        if item['relative_path'] == unidade_api.relative_path:
+                            print(f'A configuração com o identificador {conexao_api.identificador} e o path {unidade_api.relative_path} já existe!')
+                            return
+                        
+                    config[conexao_api.identificador].append({
+                        "url_base": conexao_api.url_base,
+                        "identificador": conexao_api.identificador,
+                        "authorization": conexao_api.authorization,
+                        "relative_path": unidade_api.relative_path,
+                        "body": unidade_api.body
+                    })
+                    print(f'Configuração do identificador {conexao_api.identificador} foi atualizada.')
+                    break
+            
+            if not identifcador_existente:
+                request_config = { 
+                        conexao_api.identificador: [
+                        {
+                        "url_base": conexao_api.url_base,
+                        "identificador": conexao_api.identificador,
+                        "authorization": conexao_api.authorization,
+                        "relative_path": unidade_api.relative_path,
+                        "body": unidade_api.body
+                        }
+                        ]
+                    }
+                
+                loaded_requests_config.append(request_config)
+                print(f'Nova configuração para o identificador {conexao_api.identificador} foi adicionada.')
 
     except (FileNotFoundError, json.JSONDecodeError):
-        requests_config = []
+        loaded_requests_config = []
 
-    requests_config.append(request_config)
-
-    with open(file_name, "w") as file:
-        json.dump(requests_config, file, indent=4)
+    with open(file_path, "w") as file:
+        json.dump(loaded_requests_config, file, indent=4)
 
 def request_config():
     print("Insira os dados solicitados para configurar a consulta da API")
@@ -75,19 +97,19 @@ def request_config():
         )
 
         while True:
-            chave = input("Chave: ")
+            chave = input("Chave: ").strip()
             if (
                 chave.lower() == "fim"
             ):  # Permite ao usuário terminar a inserção de parâmetros
                 break
-            valor = input(f"Valor para {chave}: ")
+            valor = input(f"Valor para {chave}: ").strip()
             body[chave] = valor
 
         try:
             conexao_api = ConexaoAPI(url_base, identificador, authorization)
             unidade_api = UnidadeAPI(relative_path, body)
             save_requests_config(conexao_api, unidade_api)
-            print("\nConfiguração API cadastrada com sucesso.")
+
         except Exception as e:
             print("Ocorreu um erro ao salvar a configuração:")
             print(f"Tipo do erro: {type(e).__name__}")
@@ -165,17 +187,17 @@ def chunks_requests(config, data_inicial, data_final, dias_incremento, temp_file
 
         data_final_periodo = min(data_inicial + dias_incremento, data_final)
 
-        data_inicial_interna_update = None
-        data_final_interna_update = None
+        key_data_inicial_interna_update = None
+        key_data_final_interna_update = None
 
         if config['relative_path'] in api_data_fields['data_inicio']:
-            data_inicial_interna_update  = api_data_fields['data_inicio'][config['relative_path']]
-            data_final_interna_update = api_data_fields['data_fim'][config['relative_path']]
+            key_data_inicial_interna_update  = api_data_fields['data_inicio'][config['relative_path']]
+            key_data_final_interna_update = api_data_fields['data_fim'][config['relative_path']]
         else:
             raise ValueError(f"Endpoint desconhecido: {config['relative_path']}")
 
-        config['body'][data_inicial_interna_update] = data_inicial.strftime("%d/%m/%Y")
-        config["body"][data_final_interna_update] = data_final_periodo.strftime("%d/%m/%Y")
+        config['body'][key_data_inicial_interna_update] = data_inicial.strftime("%d/%m/%Y")
+        config["body"][key_data_final_interna_update] = data_final_periodo.strftime("%d/%m/%Y")
 
         response = requests.post(
             f"{config['url_base']}{config['relative_path']}",
@@ -229,22 +251,7 @@ def incremental_requests(config, data_inicial, data_final, temp_file):
             "DATAFINAL": data_final
         }
 
-    elif config['relative_path'] == "APIRelatoriosCR/ContasReceberRecebidasGrid":
-        body = {
-            "FILID": "1",
-            "DUPEMISSAO1": data_inicial,
-            "DUPEMISSAO2": data_final,
-            "PARVENCIMENTO1": None,
-            "PARVENCIMENTO2": None,
-            "RECRECEBIMENTO1": None,
-            "RECRECEBIMENTO2": None,
-            "PAGAMENTOVENDA1": None,
-            "PAGAMENTOVENDA2": None,
-            "TIPOPERIODO": "1",
-            "STATUSRECEBIDO": ""
-        }
-
-    elif config['relative_path'] == "APIRelatoriosCR/ContasPagarPagasGrid":
+    elif config['relative_path'] in ["APIRelatoriosCR/ContasReceberRecebidasGrid", "APIRelatoriosCR/ContasPagarPagasGrid"]:
         body = {
             "FILID": "1",
             "DUPEMISSAO1": data_inicial,
@@ -275,9 +282,9 @@ def incremental_requests(config, data_inicial, data_final, temp_file):
         )
     
 # Métodos de DATA
-def get_initial_date(config, incremental_date=False):
+def get_initial_date(config, incremental_date=False, identificador=False):
     data_inicial = None
-    if incremental_date == False:
+    if incremental_date == False and identificador == False:
         try:
             if "ProdutosPorOS" in config["relative_path"]:
                 data_inicial = datetime.strptime(
@@ -305,7 +312,7 @@ def get_initial_date(config, incremental_date=False):
     
     else:
         try:
-            tables_initial_date = get_incremental_date()
+            tables_initial_date = get_incremental_date(identificador)
             if tables_initial_date is None:
                 pass
             elif not tables_initial_date:
@@ -326,55 +333,86 @@ def get_initial_date(config, incremental_date=False):
 
 # Download de dados das APIs
 def request_total_memory_saving():
-    file_name = file_requests_config
-
-    if not file_name.exists():
+    if not file_requests_config.exists():
         print("Arquivo de configurações de APIs não existe!")
         return
+    
+    with open(file_requests_config, "r") as file:
+        requests_config = json.load(file)  # Lista de dicionários
+        identifiers = get_identifiers(requests_config)  # Lista com os identificadores, ex: ["04056", "04091"]
+        identifiers_formated = "\n".join([f"{idx + 1} - {identifier}" for idx, identifier in enumerate(identifiers)])
 
-    with open(file_name, "r") as file:
-        requests_config = json.load(file)
+        identificador_escolhido = None
 
-        for config in requests_config:
-            temp_file = (
-                ROOT_PATH
-                / f"source/model/data/temp_file_data/{config['relative_path']}.json"
-            )
-            
-            if not temp_file.exists():
+        while True:
+            escolha = input(f'''
+Esses são os identificadores de clientes já configurados:
+{identifiers_formated}
+Q - Sair
+>>> ''')
+            if escolha in ["Q", "q"]:
+                print("Saindo...")
+                return
 
-                temp_file.parent.mkdir(parents=True, exist_ok=True)
+            if escolha.isdigit():  # Verifica se a entrada é um número
+                escolha_idx = int(escolha) - 1  # Converte a string para inteiro
+                
+                if 0 <= escolha_idx < len(identifiers):  # Verifica se o índice é válido
+                    identificador_escolhido = identifiers[escolha_idx]
+                    print(f"Você selecionou o identificador: {identificador_escolhido}")
 
-                with temp_file.open(mode="w", encoding="utf-8") as temp_file:
-                    temp_file.write("[\n")
+                    # Busca pelo identificador dentro da lista de dicionários
+                    sub_configs = None
+                    for config in requests_config:
+                        if identificador_escolhido in config:
+                            sub_configs = config[identificador_escolhido]
+                            break
 
-                    if any(item in config["relative_path"] for item in no_date_api_list):
-                        
-                        full_requests(config=config, temp_file=temp_file)
+                    if sub_configs is not None:
+                        for sub_config in sub_configs: 
+                            temp_file = ROOT_PATH / f"source/model/data/temp_file_data/{sub_config['relative_path']}_{identificador_escolhido}.json"
 
-                        temp_file.write("\n]")
+                            if not temp_file.exists():
+                                temp_file.parent.mkdir(parents=True, exist_ok=True)
+
+                                with temp_file.open(mode="w", encoding="utf-8") as temp_file:
+                                    temp_file.write("[\n")
+
+                                    if any(item in sub_config["relative_path"] for item in no_date_api_list):
+                                        full_requests(config=sub_config, temp_file=temp_file)
+                                        temp_file.write("\n]")
+                                    else:
+                                        data_inicial = get_initial_date(config=sub_config)
+
+                                        if data_inicial is None:
+                                            print(f"Verifique as configurações de: {sub_config} - {json.dumps(sub_config, indent=4)}.")
+                                            temp_file.write("\n]")
+                                            continue
+                                        
+                                        chunks_requests(
+                                            config=sub_config, 
+                                            data_inicial=data_inicial, 
+                                            data_final=None, 
+                                            dias_incremento=dias_incremento, 
+                                            temp_file=temp_file,
+                                        )
+
+                                        temp_file.write("\n]")
+                            else:
+                                print(f"O arquivo para: {sub_config['relative_path']}, já existe na pasta de arquivos temporários.")
                     else:
+                        print(f"Erro: identificador {identificador_escolhido} não encontrado no arquivo de configuração!")
+                    
+                    return identificador_escolhido
 
-                        data_inicial = get_initial_date(config=config)
-
-                        if data_inicial is None:
-                            print(f"Verifique as configurações de: {json.dumps(config, indent=4)}.")
-                            temp_file.write("\n]")
-                            continue
-                        
-                        chunks_requests(
-                            config=config, 
-                            data_inicial=data_inicial, 
-                            data_final=None, 
-                            dias_incremento=dias_incremento, 
-                            temp_file=temp_file,
-                            )
-
-                        temp_file.write("\n]")
+                else:
+                    print("Índice fora do intervalo! Tente novamente.")
             else:
-                print(f"O arquivo para: {config['relative_path']}, já existe na pasta de arquivos temporários.")
+                print("Entrada inválida! Digite apenas o número correspondente ao identificador.")
+    
+    return None  # Caso ocorra um erro inesperado
 
-def request_incremental_memory_saving():
+def request_incremental_memory_saving(identificador):
     file_name = file_requests_config
 
     if not file_name.exists():
@@ -384,52 +422,54 @@ def request_incremental_memory_saving():
     with open(file_name, "r") as file:
         requests_config = json.load(file)
 
-        print(f"{'-'*45}\nIniciando processo de download incremental...\n{'-'*45}\n")
+        print(f"{'-'*75}\nIniciando processo de download incremental para o identificador: {identificador}...\n{'-'*75}\n")
         time.sleep(2)
-        for config in requests_config:
-            temp_file = (
-                ROOT_PATH
-                / f"source/model/data/temp_file_data/{config['relative_path']}.json"
-            )
-            
+        for item in requests_config:
+            if identificador in item:
+                for config in item[identificador]:
+                    temp_file = (
+                        ROOT_PATH
+                        / f"source/model/data/temp_file_data/{config['relative_path']}_{identificador}.json"
+                    )
+                    
 
-            if not temp_file.exists():
-                temp_file.parent.mkdir(parents=True, exist_ok=True)
+                    if not temp_file.exists():
+                        temp_file.parent.mkdir(parents=True, exist_ok=True)
 
-                with temp_file.open(mode="w", encoding="utf-8") as temp_file:
-                    temp_file.write("[\n")
+                        with temp_file.open(mode="w", encoding="utf-8") as temp_file:
+                            temp_file.write("[\n")
 
-                    if any(item in config["relative_path"] for item in no_date_api_list):
-                        
-                        print(f"-Download total para: {config["relative_path"]}\n")
-                        time.sleep(1)
-                        full_requests(config=config, temp_file=temp_file)
+                            if any(item in config["relative_path"] for item in no_date_api_list):
+                                
+                                print(f"-Download total para: {config["relative_path"]}\n")
+                                time.sleep(1)
+                                full_requests(config=config, temp_file=temp_file)
 
-                        temp_file.write("\n]")
+                                temp_file.write("\n]")
+
+                            else:
+                                print(f"-Fazendo consulta de data incremental para: {config["relative_path"]} - {identificador}")
+                                time.sleep(1)
+                                data_inicial = get_initial_date(config=config, incremental_date=True, identificador=identificador)
+
+                                if data_inicial is None:
+                                    print(f"Não foi possível obter a data incremental para a tabela: {config['relative_path']}")
+                                    temp_file.write("\n]")
+                                    continue
+
+                                data_fim = data_final.strftime("%d/%m/%Y")
+                                
+                                print(f"-Iniciando download incremental para: {config["relative_path"]}")
+                                incremental_requests(
+                                    config=config, 
+                                    data_inicial=data_inicial, 
+                                    data_final=data_fim,
+                                    temp_file=temp_file,
+                                    )
+
+                                temp_file.write("\n]")
+
+                                print(f"-Download incremental de: {config["relative_path"]}, finalizado!\n ")
 
                     else:
-                        print(f"-Fazendo consulta de data incremental para: {config["relative_path"]}")
-                        time.sleep(1)
-                        data_inicial = get_initial_date(config=config, incremental_date=True)
-
-                        if data_inicial is None:
-                            print(f"Não foi possível obter a data incremental para a tabela: {config['relative_path']}")
-                            temp_file.write("\n]")
-                            continue
-
-                        data_fim = data_final.strftime("%d/%m/%Y")
-                        
-                        print(f"-Iniciando download incremental para: {config["relative_path"]}")
-                        incremental_requests(
-                            config=config, 
-                            data_inicial=data_inicial, 
-                            data_final=data_fim,
-                            temp_file=temp_file,
-                            )
-
-                        temp_file.write("\n]")
-
-                        print(f"-Download incremental de: {config["relative_path"]}, finalizado!\n ")
-
-            else:
-                print(f"O arquivo para: {config['relative_path']}, já existe na pasta de arquivos temporários.")
+                        print(f"O arquivo para: {config['relative_path']}, já existe na pasta de arquivos temporários.")
