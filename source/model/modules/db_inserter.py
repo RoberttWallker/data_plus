@@ -1,28 +1,22 @@
-from pathlib import Path
-import ijson
-import traceback
-import time
-import re
-from datetime import datetime
 import json
-from sqlalchemy import Table, Column, Text, delete
-from sqlalchemy.sql import text
 import logging
+import re
+import time
+import traceback
+from datetime import datetime
 
+import ijson
+from sqlalchemy import Column, Table, Text, delete
+from sqlalchemy.sql import text
 
-from .db_connector import (
-    mysql_connection,
-    postgresql_connection,
-    load_config_file,
-    load_config_file_update
-)
-from .db_update import formatar_datas_incrementais
-from .aux_func_app import no_date_api_list, delete_temp_files, ghost_exec_creation
+from .aux_func_app import (delete_temp_files, ghost_exec_creation,
+                           no_date_api_list)
 from .aux_func_inserter import tabelas_e_colunas, tabelas_e_dados
+from .db_connector import (load_config_file, load_config_file_update,
+                           mysql_connection, postgresql_connection)
+from .db_update import formatar_datas_incrementais
+from .constants import CONFIG_PATH, TEMP_DATA_PATH
 
-MODEL_PATH = Path(__file__).absolute().parent.parent
-CONFIG_PATH = MODEL_PATH / "config"
-TEMP_FILE_PATH = MODEL_PATH / "data/temp_file_data"
 
 def comparar_tabelas(conn, identificador):
     connection = conn.connection
@@ -72,7 +66,7 @@ def comparar_tabelas(conn, identificador):
         
         return diff
     
-    for file in TEMP_FILE_PATH.rglob("*.json"):
+    for file in TEMP_DATA_PATH.rglob("*.json"):
         table_name = re.sub(r"([a-z])([A-Z])", r"\1_\2", file.name.split("Grid")[0]).lower()
         file_content = load_config_file_update(file)
         
@@ -96,14 +90,11 @@ def comparar_tabelas(conn, identificador):
         print(msg_diff)
         logging.info(msg_diff)
 
-        # for linha in diferencas:
-        #     print(json.dumps(linha[2:], indent=4))
-
     return tabelas_e_diferencas
             
 # Inserção de dados
 def insert_tables_metadata(conn):
-    perfil_colunas = tabelas_e_colunas(TEMP_FILE_PATH)
+    perfil_colunas = tabelas_e_colunas(TEMP_DATA_PATH)
 
     for tabela, colunas in perfil_colunas:
         if not colunas:
@@ -117,7 +108,7 @@ def insert_tables_metadata(conn):
     conn.metadata.create_all(conn.engine)
 
 def insert_data(conn):
-    dados_completos = tabelas_e_dados(TEMP_FILE_PATH)
+    dados_completos = tabelas_e_dados(TEMP_DATA_PATH)
 
     connection = conn.connection
     connection_name = f"{conn.db_name} - {conn.dialect}"
@@ -317,7 +308,7 @@ def insert_total_into_db(identificador):
             traceback.print_exc()
 
     if all(controle.values()):
-        delete_temp_files(TEMP_FILE_PATH)
+        delete_temp_files(TEMP_DATA_PATH)
     else:
         print("Nem todas as inserções foram bem-sucedidas. Arquivos mantidos.")
 
@@ -380,6 +371,6 @@ def insert_increment_into_db(identificador):
                     controle["Fora_padrao_ou_sgbd_nao_configurado"] = False
 
     if all(controle.values()):
-        delete_temp_files(TEMP_FILE_PATH)
+        delete_temp_files(TEMP_DATA_PATH)
     else:
         print("Nem todas as inserções foram bem-sucedidas. Arquivos mantidos.")

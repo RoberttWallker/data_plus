@@ -1,14 +1,13 @@
 import time
-from source.controller.controller import (
-    init_creation_db,
-    init_creation_requests,
-    total_data_requests,
-    total_inserter,
-    create_column_incremental,
-    init_incremental_update,
-    create_scheduler_windows,
-    manager_init_database
-)
+
+from source.controller.controller import (create_column_incremental,
+                                          create_scheduler_windows,
+                                          init_creation_db,
+                                          init_creation_requests,
+                                          init_incremental_update,
+                                          manager_init_database,
+                                          total_data_requests, total_inserter)
+
 
 def main():
     while True:

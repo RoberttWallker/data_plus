@@ -1,15 +1,10 @@
-from controller import init_incremental_update
-from pathlib import Path
 import logging
 
-ROOT_PATH = Path(__file__).resolve().parent.parent
+from controller import init_incremental_update
+from source.model.modules.constants import file_application_logs
 
-LOG_DIR = ROOT_PATH / "logs/application_logs"
-LOG_FILE = LOG_DIR / "update_logs.log"
-
-
-LOG_DIR.mkdir(parents=True, exist_ok=True)
-
+file_application_logs.parent.mkdir(parents=True, exist_ok=True)
+LOG_FILE = file_application_logs
 
 # Criar um FileHandler com UTF-8
 file_handler = logging.FileHandler(LOG_FILE, mode='a', encoding='utf-8')

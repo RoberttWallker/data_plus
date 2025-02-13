@@ -1,21 +1,19 @@
-import traceback
-from sqlalchemy import create_engine, MetaData, text
-from sqlalchemy.exc import OperationalError
-import time
-from urllib.parse import quote
-from model.modules.classes import DbMySql, DbPostgreSql, ConfigDB
 import json
-from pathlib import Path
+import time
+import traceback
+from urllib.parse import quote
+
 import psycopg2
+from sqlalchemy import MetaData, create_engine, text
+from sqlalchemy.exc import OperationalError
 
-
-MODEL_PATH = Path(__file__).absolute().parent.parent
-DB_CONFIG_PATH = MODEL_PATH / "config/db_config/"
+from .classes import ConfigDB, DbMySql, DbPostgreSql
+from .constants import (DB_CONFIG_PATH, file_db_config_mysql,
+                        file_db_config_postgresql)
 
 
 # Funções de salvamento e carregamento de configurações de bancos de dados
 def save_db_config(db_config, filename):
-
     filename.parent.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -39,7 +37,6 @@ def save_db_config(db_config, filename):
         json.dump(db_configs, file, indent=4)
 
 def load_config_file(filename):
-
     try:
         with open(filename, "r") as file:
             return json.load(file)
@@ -47,7 +44,6 @@ def load_config_file(filename):
         return []
 
 def load_config_file_update(filename):
-
     try:
         with open(filename, "r", encoding="utf-8") as file:
             return json.load(file)
@@ -127,8 +123,8 @@ def mysql_configuration(
         }
 
         save_db_config(
-            db_config=db_config,
-            filename=MODEL_PATH / "config/db_config/db_config_mysql.json",
+            db_config = db_config,
+            filename = file_db_config_mysql,
         )
     except OperationalError as e:
         numero_erro = e.orig.args[0] # type: ignore
@@ -209,8 +205,8 @@ def postgresql_configuration(
             "dbname": dbname,
         }
         save_db_config(
-            db_config=db_config,
-            filename=MODEL_PATH / "config/db_config/db_config_postgresql.json",
+            db_config = db_config,
+            filename = file_db_config_postgresql,
         )
 
     except psycopg2.OperationalError as e:
@@ -572,15 +568,14 @@ def create_connection_db():
         ).upper()
         if escolha == "1":
             config_db = get_connecion_data()
-
-            mysql_configs_file = DB_CONFIG_PATH / "db_config_mysql.json"
+            mysql_configs_file = file_db_config_mysql
 
             check_existing_db_config(config_db, mysql_configuration, mysql_configs_file)
             
 
         elif escolha == "2":
             config_db = get_connecion_data()
-            postgresql_configs_file = DB_CONFIG_PATH / "db_config_postgresql.json"
+            postgresql_configs_file = file_db_config_postgresql
 
             check_existing_db_config(config_db, postgresql_configuration, postgresql_configs_file)
 

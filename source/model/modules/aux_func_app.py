@@ -1,9 +1,8 @@
-from pathlib import Path
 import subprocess
 import time
 
-SRC_PATH = Path(__file__).resolve().parent.parent.parent
-ROOT_PATH = Path(__file__).cwd()
+from .constants import (ROOT_PATH, TASK_PATH, ghost_incremental_vbs_file,
+                        task_incremental_bat_file)
 
 no_date_api_list = ["EstoqueAnalitico", "ProdutosCadastrados"]
 
@@ -28,25 +27,20 @@ def formatar_nome_para_root(nome):
     return ''.join(partes_capitalizadas)
 
 def ghost_exec_creation():
-
-    task_path = "controller/tasks"
-    
-    bat_file = SRC_PATH / task_path / "task_exec_incremental.bat"
-    vbs_file = SRC_PATH / task_path / "ghost_exec_task.vbs"
+    bat_file = task_incremental_bat_file
+    vbs_file = ghost_incremental_vbs_file
 
     task_files = [bat_file, vbs_file]
 
     for file in task_files:
         file.parent.mkdir(parents=True, exist_ok=True)
 
-    if Path(bat_file).exists() and Path(vbs_file).exists():
+    if bat_file.exists() and vbs_file.exists():
         print("Os arquivos BAT e VBS já existem. Nenhuma ação foi realizada.\n")
         return  # Sai da função se os arquivos já existem
 
-    root = ROOT_PATH
     venv_folder = None
-
-    for folder in root.iterdir():
+    for folder in ROOT_PATH.iterdir():
         if folder.is_dir() and (folder / "pyvenv.cfg").exists():
             venv_folder = folder.name
             break
@@ -75,9 +69,7 @@ WshShell.Run """{str(bat_file)}""", 0, False
     print(f"Arquivo VBS criado em: {vbs_file}\n")
 
 def create_task_scheduler_windows():
-
-    vbs_file_ghost_exec = SRC_PATH / "controller" / "tasks" / "ghost_exec_task.vbs"
-    bat_file_temp = SRC_PATH / "controller" / "tasks" / "bat_file_temp.bat"
+    bat_file_temp = TASK_PATH / "bat_file_temp.bat"
 
     bat_content = f"""
 @echo off
@@ -85,7 +77,7 @@ setlocal
 
 :: Definição de variáveis
 set "TASK_NAME=GhostExecIncrementalSavWin"
-set "VBS_PATH={vbs_file_ghost_exec}"
+set "VBS_PATH={ghost_incremental_vbs_file}"
 
 :: Criar a tarefa agendada
 schtasks /create /tn "%TASK_NAME%" /tr "wscript.exe \"%VBS_PATH%\"" /sc HOURLY /F /RL HIGHEST /RU SYSTEM
@@ -100,8 +92,8 @@ if %errorlevel%==0 (
 pause
 exit
 """
-    with open(bat_file_temp, "w") as bat_file_name:
-        bat_file_name.write(bat_content)
+    with open(bat_file_temp, "w") as bft:
+        bft.write(bat_content)
     print(f"Arquivo BAT criado em: {bat_file_temp}")
 
     if not bat_file_temp.exists():

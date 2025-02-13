@@ -1,19 +1,18 @@
-from sqlalchemy import create_engine, inspect, Table, Column, Text
-from sqlalchemy.sql import text
-from datetime import datetime, timedelta
-from pathlib import Path
-import time
 import json
+import time
+from datetime import datetime, timedelta
 
-from .db_connector import (
-    mysql_connection,
-    postgresql_connection,
-    load_config_file
-)
+from sqlalchemy import inspect
+from sqlalchemy.sql import text
 
-MODEL_PATH = Path(__file__).absolute().parent.parent
-CONFIG_PATH = MODEL_PATH / "config"
-TEMP_FILE_PATH = MODEL_PATH / "data/temp_file_data"
+from .db_connector import (load_config_file, mysql_connection,
+                           postgresql_connection)
+from .constants import (DB_CONFIG_PATH, INCREMENT_CONFIG_PATH,
+                        TEMP_DATA_PATH, file_db_config_mysql,
+                        file_db_config_postgresql,
+                        file_incremental_config_mysql,
+                        file_incremental_config_postgresql)
+
 
 def datetime_converter(o):
     if isinstance(o, datetime):
@@ -38,34 +37,34 @@ def formatar_datas_incrementais(identificador):
             with open(temp_file, "w") as outfile:
                 json.dump(file_content, outfile, indent=4, ensure_ascii=False)
     
-    for file in CONFIG_PATH.rglob("incremental_config/*.json"):
+    for file in INCREMENT_CONFIG_PATH.rglob("*.json"):
         incremental_config = load_config_file(file)
         for db_config in incremental_config:
             for db_name in db_config:
                 if identificador in db_name.split("_"):
                     for table_info in db_config[db_name]:
                         if table_info['table'] == "contas_receber_recebidas":
-                            temp_file = TEMP_FILE_PATH / f"APIRelatoriosCR/ContasReceberRecebidasGrid_{identificador}.json"
+                            temp_file = TEMP_DATA_PATH / f"APIRelatoriosCR/ContasReceberRecebidasGrid_{identificador}.json"
                             modificar(temp_file, 'EMISSAO')
                         elif table_info['table'] == "contas_pagar_pagas":
-                            temp_file = TEMP_FILE_PATH / f"APIRelatoriosCR/ContasPagarPagasGrid_{identificador}.json"
+                            temp_file = TEMP_DATA_PATH / f"APIRelatoriosCR/ContasPagarPagasGrid_{identificador}.json"
                             modificar(temp_file, 'EMISSAO')
                         elif table_info['table'] == "produtos_por_os":
-                            temp_file = TEMP_FILE_PATH / f"APIRelatoriosCR/ProdutosPorOSGrid_{identificador}.json"
+                            temp_file = TEMP_DATA_PATH / f"APIRelatoriosCR/ProdutosPorOSGrid_{identificador}.json"
                             modificar(temp_file, 'DATA')
                         elif table_info['table'] == "entradas_estoque":
-                            temp_file = TEMP_FILE_PATH / f"APIRelatoriosCR/EntradasEstoqueGrid_{identificador}.json"
+                            temp_file = TEMP_DATA_PATH / f"APIRelatoriosCR/EntradasEstoqueGrid_{identificador}.json"
                             modificar(temp_file, 'DATAENTRADA')
 
 def get_incremental_date(identificador):
-    for file in CONFIG_PATH.rglob("db_config/*.json"):
+    for file in DB_CONFIG_PATH.rglob("*.json"):
         db_configs = load_config_file(file)
         for config in db_configs:
             for key, value in config.items():
                 if key == 'dbname':
                     print(f"Verificando se '{identificador}' está em '{value}'")
                     if identificador in value.split("_"):
-                        if file.name == "db_config_mysql.json":
+                        if file.name == file_db_config_mysql.name:
                             time.sleep(1)
                             # print(f"\nEssas são as configuraçãoes do banco de dados:\n{config}\n")
                             time.sleep(1)
@@ -82,8 +81,8 @@ def get_incremental_date(identificador):
                                 break
                             else:
                                 connection = conn.connection
-                                for file in CONFIG_PATH.rglob("incremental_config/*.json"):
-                                    if file.name == "incremental_config_mysql.json":
+                                for file in INCREMENT_CONFIG_PATH.rglob("*.json"):
+                                    if file.name == file_incremental_config_mysql.name:
                                         incremental_configs = load_config_file(file)
                                         
                                         table_last_date = []
@@ -112,7 +111,7 @@ def get_incremental_date(identificador):
                                         return(table_last_date)
 
 
-                        elif file.name == "db_config_postgresql.json":
+                        elif file.name == file_db_config_postgresql.name:
                             # print(f"\nEssas são as configuraçãoes do db:\n{config}\n")
                             conn = postgresql_connection(
                                 config["host"],
@@ -127,8 +126,8 @@ def get_incremental_date(identificador):
                                 break
                             else:
                                 connection = conn.connection
-                                for file in CONFIG_PATH.rglob("incremental_config/*.json"):
-                                    if file.name == "incremental_config_postgresql.json":
+                                for file in INCREMENT_CONFIG_PATH.rglob("*.json"):
+                                    if file.name == file_incremental_config_postgresql.name:
                                         incremental_configs = load_config_file(file)
 
                                         table_last_date = []
@@ -157,7 +156,6 @@ def get_incremental_date(identificador):
 
 def save_incremental_column_config(incremental_config, filename):
     filename.parent.mkdir(parents=True, exist_ok=True)
-
     try:
         with open(filename, "r") as file:
             update_configs = json.load(file)
@@ -276,7 +274,7 @@ def alter_date_format(conn, table_, column_):
             }]
         }
 
-        save_incremental_column_config(incremental_config, CONFIG_PATH / "incremental_config/incremental_config_mysql.json")
+        save_incremental_column_config(incremental_config, file_incremental_config_mysql)
 
     elif conn.dialect == "postgresql":
         alter_column_to_datetime_postgresql(connection, table_, column_)
@@ -288,7 +286,7 @@ def alter_date_format(conn, table_, column_):
             }]
         }
 
-        save_incremental_column_config(incremental_config, CONFIG_PATH / "incremental_config/incremental_config_postgresql.json")
+        save_incremental_column_config(incremental_config, file_incremental_config_postgresql)
 
 def create_column_incremental_update_pbi():
     table_column_mappings = []
@@ -342,13 +340,14 @@ def get_tables_columns_date(conn):
                 for value in rows:
                     if value and isinstance(value, datetime):
                         continue
-                        #print(f"FORMATO DATETIME: {table} - {column} - {value}")
+
                     elif value:
                         try:
-                            formated = datetime.strptime(value, formato_exemplo).strftime(formato_exemplo)
-                            #print(f"FORMATO STR: {table} - {column} - {formated}")
+                            #formated = datetime.strptime(value, formato_exemplo).strftime(formato_exemplo)
+                            datetime.strptime(value, formato_exemplo)
                             if column not in columns_date:
                                 columns_date.append(column)
+
                         except ValueError:
                             continue
                     else:
@@ -358,18 +357,16 @@ def get_tables_columns_date(conn):
                 print(f"capturado no except exterior : {e}")     
         
         tables_columns_date.append((table, columns_date))
-    #print(f"\n{'*'*32}\n{tables_columns_date}")
     return tables_columns_date      
 
 def update_flow(file):
     db_configs = load_config_file(file)
-    
     for config in db_configs:
         print("\nIniciando...")
         time.sleep(1)
         print(f"\nEssas são as configuraçãoes do banco de dados:\n{config}\n")
         time.sleep(1)
-        if file.name == "db_config_mysql.json":
+        if file.name == file_db_config_mysql.name:
             conn = mysql_connection(
                 config["host"],
                 config["port"],
@@ -377,7 +374,7 @@ def update_flow(file):
                 config["password"],
                 config["dbname"],
             )
-        elif file.name == "db_config_postgresql.json":
+        elif file.name == file_db_config_postgresql.name:
             conn = postgresql_connection(
                 config["host"],
                 config["port"],
@@ -387,7 +384,6 @@ def update_flow(file):
             )
 
         tables_columns_date = get_tables_columns_date(conn)
-        #print(f"TESTE AQUI DIALETC: {conn.dialect}")
         for table, columns in tables_columns_date:
             print(f"Tabela: {table}")
             if columns:
@@ -426,9 +422,9 @@ Confirme se essas são as tabelas e respectivas colunas que quer atualizar:
 
 def manager_update_date():
 
-    count = len(list(CONFIG_PATH.rglob("db_config/*.json")))
+    count = len(list(DB_CONFIG_PATH.rglob("*.json")))
     if count > 1:
-        file_list = list(CONFIG_PATH.rglob("db_config/*.json"))
+        file_list = list(DB_CONFIG_PATH.rglob("*.json"))
         print(f"Existe mais de um SGBD configurado, qual deles você deseja usar?\n")
         for idx, file in enumerate(file_list):
             print(f"{idx} - {file.name}")
@@ -442,5 +438,5 @@ def manager_update_date():
                 print("Índice inválido. Tente novamente.")
         update_flow(file)
     else:
-        for file in CONFIG_PATH.rglob("db_config/*.json"):
+        for file in DB_CONFIG_PATH.rglob("*.json"):
             update_flow(file)

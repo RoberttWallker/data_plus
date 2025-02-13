@@ -12,7 +12,6 @@ class UnidadeAPI:
         self.relative_path = relative_path
         self.body = body
 
-
 # Classes para configuração de banco de dados
 class ConfigDB:
     def __init__(

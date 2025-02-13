@@ -1,40 +1,27 @@
-from datetime import datetime, timedelta, date
-import inspect
-from pathlib import Path
-import requests
 import json
 import time
 import traceback
+from datetime import datetime, timedelta
 
+import requests
 
-from model.modules.classes import ConexaoAPI, UnidadeAPI
-from model.modules.db_update import get_incremental_date
-from model.modules.aux_func_app import get_identifiers, formatar_nome_para_root, no_date_api_list
-
-ROOT_PATH = Path.cwd()
-file_requests_config = ROOT_PATH / "source/model/config/requests_config/requests_config.json"
+from .aux_func_app import (formatar_nome_para_root, get_identifiers,
+                           no_date_api_list)
+from .classes import ConexaoAPI, UnidadeAPI
+from .db_update import get_incremental_date
+from .constants import ROOT_PATH, TEMP_DATA_PATH, file_requests_config
 
 data_final = datetime.today()
 dias_incremento = timedelta(days=90)
 
 # Configurações de APIs
 def save_requests_config(conexao_api, unidade_api):
-    file_path = file_requests_config
-
-    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_requests_config.parent.mkdir(parents=True, exist_ok=True)
 
     try:
-        with open(file_path, "r") as file:
+        with open(file_requests_config, "r") as file:
             loaded_requests_config = json.load(file)
-            # for config in loaded_requests_config:
-                # if (
-                #     config["identificador"] == request_config["identificador"]
-                #     and config["relative_path"] == request_config["relative_path"]
-                # ):
-                #     print(
-                #         f'A Request: {request_config['relative_path']} com o identificador: {request_config["identificador"]} já existe!'
-                #     )
-                #     return
+            
             identifcador_existente = False
             for config in loaded_requests_config:
                 if conexao_api.identificador in config:
@@ -73,7 +60,7 @@ def save_requests_config(conexao_api, unidade_api):
     except (FileNotFoundError, json.JSONDecodeError):
         loaded_requests_config = []
 
-    with open(file_path, "w") as file:
+    with open(file_requests_config, "w") as file:
         json.dump(loaded_requests_config, file, indent=4)
 
 def request_config():
@@ -370,7 +357,7 @@ Q - Sair
 
                     if sub_configs is not None:
                         for sub_config in sub_configs: 
-                            temp_file = ROOT_PATH / f"source/model/data/temp_file_data/{sub_config['relative_path']}_{identificador_escolhido}.json"
+                            temp_file = ROOT_PATH / TEMP_DATA_PATH / f"{sub_config['relative_path']}_{identificador_escolhido}.json"
 
                             if not temp_file.exists():
                                 temp_file.parent.mkdir(parents=True, exist_ok=True)
@@ -413,13 +400,11 @@ Q - Sair
     return None  # Caso ocorra um erro inesperado
 
 def request_incremental_memory_saving(identificador):
-    file_name = file_requests_config
-
-    if not file_name.exists():
+    if not file_requests_config.exists():
         print("Arquivo de configurações de APIs não existe!")
         return
 
-    with open(file_name, "r") as file:
+    with open(file_requests_config, "r") as file:
         requests_config = json.load(file)
 
         print(f"{'-'*75}\nIniciando processo de download incremental para o identificador: {identificador}...\n{'-'*75}\n")
@@ -427,12 +412,8 @@ def request_incremental_memory_saving(identificador):
         for item in requests_config:
             if identificador in item:
                 for config in item[identificador]:
-                    temp_file = (
-                        ROOT_PATH
-                        / f"source/model/data/temp_file_data/{config['relative_path']}_{identificador}.json"
-                    )
+                    temp_file = ROOT_PATH / TEMP_DATA_PATH / f"{config['relative_path']}_{identificador}.json"
                     
-
                     if not temp_file.exists():
                         temp_file.parent.mkdir(parents=True, exist_ok=True)
 

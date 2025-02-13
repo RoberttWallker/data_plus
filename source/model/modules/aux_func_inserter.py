@@ -1,6 +1,7 @@
-from datetime import datetime
 import re
+
 import ijson
+
 
 # Perfil das tabelas
 def obter_colunas(arquivo):
