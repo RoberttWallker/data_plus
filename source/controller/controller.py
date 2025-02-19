@@ -7,11 +7,12 @@ from pathlib import Path
 SRC_PATH = Path(__file__).absolute().parent.parent
 sys.path.append(str(SRC_PATH))
 
+
 from model.modules.api_connector import request_config, request_total_memory_saving, request_incremental_memory_saving, file_requests_config
 from model.modules.db_connector import create_connection_db, init_a_database
 from model.modules.db_inserter import insert_total_into_db, insert_increment_into_db
 from model.modules.db_update import manager_update_date
-from model.modules.aux_func_app import create_task_scheduler_windows, get_identifiers
+from model.modules.aux_func_app import create_task_scheduler_windows, get_identifiers, create_token_file
 
 local_host_name = socket.gethostname()
 local_user_name = os.getlogin()
@@ -51,3 +52,6 @@ def create_scheduler_windows():
 
 def manager_init_database():
     init_a_database()
+
+def token_creation():
+    create_token_file()

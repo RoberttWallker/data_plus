@@ -1,8 +1,9 @@
 import subprocess
 import time
+import json
 
 from .constants import (ROOT_PATH, TASK_PATH, ghost_incremental_vbs_file,
-                        task_incremental_bat_file)
+                        task_incremental_bat_file, file_token)
 
 no_date_api_list = ["EstoqueAnalitico", "ProdutosCadastrados"]
 
@@ -124,3 +125,22 @@ def get_identifiers(file):
             identifiers.extend(item.keys())
     
     return identifiers
+
+def create_token_file():
+    token = input("Insira o seu Token Data Plus Engine: ").strip()
+    identificador_savwin = input("Insira o identificador SavWin: ").strip()
+
+    if token:
+        try:
+            with open(file_token, 'w', encoding='utf-8') as ft:
+                json.dump({"identificador": identificador_savwin, "token": token}, ft, indent=4)
+                print("Token salvo com sucesso!")
+
+        except PermissionError:
+            print("Erro: Permissão negada para gravar o arquivo.")
+        except FileNotFoundError:
+            print("Erro: Caminho do arquivo não encontrado.")
+        except OSError as e:
+            print(f"Erro do sistema operacional: {e}")
+        except Exception as e:
+            print(f"Ocorreu um erro inesperado: {e}")

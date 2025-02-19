@@ -1,8 +1,16 @@
 from pathlib import Path
 
+
+
 #PATH STRUCTURES
 ROOT_PATH = Path.cwd()
+
+
+#Source Path
 SRC_PATH = ROOT_PATH / "source"
+
+#Estrutura licencsing
+LCS_PATH = SRC_PATH / "licensing"
 
 #Estrutura controller
 CTRL_PATH = SRC_PATH / "controller"
@@ -27,6 +35,8 @@ TEMP_DATA_PATH = DATA_PATH / "temp_file_data"
 MODULES_PATH = MODEL_PATH / "modules"
 
 #---------------------------------------------------------------------------
+#LICENSING FILES
+file_token = LCS_PATH / "license_token.json"
 
 #TASKS FILES
 task_incremental_bat_file = TASK_PATH / "task_exec_incremental.bat"

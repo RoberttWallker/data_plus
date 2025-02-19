@@ -6,7 +6,9 @@ from source.controller.controller import (create_column_incremental,
                                           init_creation_requests,
                                           init_incremental_update,
                                           manager_init_database,
-                                          total_data_requests, total_inserter)
+                                          total_data_requests, total_inserter,
+                                          token_creation,
+                                          )
 
 
 def main():
@@ -25,6 +27,9 @@ Q - Sair
 ).upper()
         if resposta == "1":
             while True:
+                
+                token_creation()
+
                 resposta_2 = input('Deseja inserir as configurações de um novo banco de dados? s/n\n>>> ').lower()
                 if resposta_2 == "s":
                     time.sleep(1)
