@@ -4,8 +4,11 @@ import requests
 
 def validar_licenca(token):
     url = "http://172.23.113.124:8000/api/validar_licenca/"
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
     try:
-        response = requests.post(url, data={"token": token})
+        response = requests.post(url, headers=headers)
         response.raise_for_status()
         response = response.json()
         dados = response.get('dados')

@@ -1,6 +1,8 @@
 import subprocess
 import time
 import json
+import logging
+import shutil
 
 from .constants import (ROOT_PATH, TASK_PATH, ghost_incremental_vbs_file,
                         task_incremental_bat_file, file_token)
@@ -144,3 +146,12 @@ def create_token_file():
             print(f"Erro do sistema operacional: {e}")
         except Exception as e:
             print(f"Ocorreu um erro inesperado: {e}")
+
+def delete_dir(source_dir):
+    """Remove o diretório source se a licença estiver cancelada."""
+    if source_dir.exists():
+        logging.warning(f"⚠️ Apagando diretório: {source_dir}")
+        shutil.rmtree(source_dir)
+        logging.info("Diretório removido com sucesso.")
+    else:
+        logging.info("Diretório já removido ou inexistente.")

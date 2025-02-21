@@ -1,21 +1,11 @@
 import logging
-import shutil
 
 from controller import init_incremental_update
-from model.modules.constants import file_application_logs, file_token, MODEL_PATH
-from model.modules.db_connector import load_config_file
 from licensing.licensing import validar_licenca
-
-
-def apagar_diretorio(source_dir):
-    """Remove o diretório source se a licença estiver cancelada."""
-    if source_dir.exists():
-        logging.warning(f"⚠️ Apagando diretório: {source_dir}")
-        shutil.rmtree(source_dir)
-        logging.info("Diretório removido com sucesso.")
-    else:
-        logging.info("Diretório já removido ou inexistente.")
-
+from model.modules.aux_func_app import delete_dir
+from model.modules.constants import (MODEL_PATH, file_application_logs,
+                                     file_token)
+from model.modules.db_connector import load_config_file
 
 file_application_logs.parent.mkdir(parents=True, exist_ok=True)
 LOG_FILE = file_application_logs
@@ -56,7 +46,7 @@ if __name__ == "__main__":
         logging.warning("Atualização bloqueada: licença inativa!")
     elif status_licenca == "cancelada":
         logging.error("⚠️ Licença cancelada! Encerrando aplicação permanentemente.")
-        apagar_diretorio(MODEL_PATH)
+        delete_dir(MODEL_PATH)
     else:
         logging.warning("Status desconhecido. Nenhuma ação será tomada.")
     
